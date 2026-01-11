@@ -1,14 +1,13 @@
-import os
 from pathlib import Path
-from dotenv import load_dotenv
-
-load_dotenv()
+from decouple import config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-x)gfqh5788_yajyu$+1&c410wj4o1paojzcmff$4&a%&me8-dc')
-DEBUG = os.getenv('DEBUG', 'True') == 'True'
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+SECRET_KEY = config('SECRET_KEY', default='django-insecure-uy4mex!55$fyy$ts540(oyb^yr^s2##6-26%k+m!^ifntw8e^8')
+
+DEBUG = config('DEBUG', default=True, cast=bool)
+
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*').split(',')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -17,14 +16,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
-    # Third party apps
     'rest_framework',
     'corsheaders',
-    
-    # Local apps
-    'apps.metadata',
-    'apps.analytics',
+    'main',
 ]
 
 MIDDLEWARE = [
@@ -43,7 +37,7 @@ ROOT_URLCONF = 'automated.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
+        'DIRS': [],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -79,80 +73,59 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
-        'rest_framework.renderers.BrowsableAPIRenderer',
     ],
     'DEFAULT_PARSER_CLASSES': [
         'rest_framework.parsers.JSONParser',
         'rest_framework.parsers.MultiPartParser',
         'rest_framework.parsers.FormParser',
     ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
-    ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 100,
+    'PAGE_SIZE': 10,
 }
 
-# CORS Configuration
-CORS_ALLOWED_ORIGINS = os.getenv(
-    'CORS_ALLOWED_ORIGINS',
-    'http://localhost:3000,http://127.0.0.1:3000'
-).split(',')
-CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOW_ALL_ORIGINS = True
+
 CORS_ALLOW_CREDENTIALS = True
 
-# File Upload Settings
-MAX_FILE_SIZE = int(os.getenv('MAX_FILE_SIZE', 10485760))  # 10MB default
-FILE_UPLOAD_MAX_MEMORY_SIZE = MAX_FILE_SIZE
-DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_FILE_SIZE
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
 
-# Supported File Formats
-SUPPORTED_FILE_FORMATS = {
-    'images': ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'],
-    'documents': ['.pdf', '.docx', '.xlsx', '.pptx'],
-    'audio': ['.mp3', '.wav', '.flac', '.m4a'],
-    'video': ['.mp4', '.mov', '.avi', '.mkv'],
-}
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
-# Platform-specific metadata rules
-PLATFORM_RULES = {
-    'instagram': {
-        'remove': ['gps', 'camera', 'software', 'author'],
-        'keep': ['orientation', 'datetime'],
-    },
-    'facebook': {
-        'remove': ['gps', 'camera', 'software'],
-        'keep': ['orientation', 'datetime'],
-    },
-    'twitter': {
-        'remove': ['gps', 'camera', 'software', 'author'],
-        'keep': ['orientation'],
-    },
-    'linkedin': {
-        'remove': ['gps', 'camera', 'software'],
-        'keep': ['author', 'datetime'],
-    },
-    'general': {
-        'remove': ['all'],
-        'keep': [],
-    },
-}
+MAX_UPLOAD_SIZE = 52428800
 
-# Risk scoring weights
-RISK_WEIGHTS = {
-    'gps': 10,
-    'camera': 5,
-    'software': 3,
-    'author': 7,
-    'datetime': 2,
-    'device_id': 8,
-}
+FILE_UPLOAD_MAX_MEMORY_SIZE = 52428800
+
+SUPPORTED_FILE_FORMATS = [
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'image/tiff',
+    'application/pdf',
+]
