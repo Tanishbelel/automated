@@ -66,23 +66,29 @@ class AnalyzeFileView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         uploaded_file = serializer.validated_data['file']
-        platform = serializer.validated_data['platform']
+        platform = serializer.validated_data.get('platform', 'general')
         
-        file_analysis = FileAnalysis.objects.create(
-            user=request.user if request.user.is_authenticated else None,
-            original_filename=uploaded_file.name,
-            file_type=uploaded_file.content_type,
-            file_size=uploaded_file.size,
-            platform=platform,
-            status='pending'
-        )
-        
-        file_analysis.original_file.save(uploaded_file.name, uploaded_file, save=True)
+        file_analysis = None
         
         try:
+            # Create record
+            file_analysis = FileAnalysis.objects.create(
+                user=request.user if request.user.is_authenticated else None,
+                original_filename=uploaded_file.name,
+                file_type=uploaded_file.content_type,
+                file_size=uploaded_file.size,
+                platform=platform,
+                status='pending'
+            )
+            
+            # Save original
+            file_analysis.original_file.save(uploaded_file.name, uploaded_file)
+            
+            # Extract metadata
             uploaded_file.seek(0)
             metadata = MetadataExtractor.extract_metadata(uploaded_file, uploaded_file.content_type)
             
+            # Create entries
             metadata_entries = []
             for key, value in metadata.items():
                 category = MetadataExtractor.categorize_metadata(key, value)
@@ -90,43 +96,30 @@ class AnalyzeFileView(APIView):
                 
                 entry = MetadataEntry.objects.create(
                     file_analysis=file_analysis,
-                    key=key,
-                    value=value,
+                    key=str(key),
+                    value=str(value)[:500],
                     category=category,
                     risk_level=risk_level
                 )
                 metadata_entries.append(entry)
             
-            metadata_entries_data = [
-                {
-                    'key': e.key,
-                    'value': e.value,
-                    'category': e.category,
-                    'risk_level': e.risk_level
-                }
-                for e in metadata_entries
-            ]
+            # Calculate risk
+            metadata_data = [{'category': e.category} for e in metadata_entries]
+            risk_score = RiskAnalyzer.calculate_risk_score(metadata_data)
             
-            risk_score = RiskAnalyzer.calculate_risk_score(metadata_entries_data)
-            
+            # Remove metadata
             uploaded_file.seek(0)
-            cleaned_file = MetadataRemover.remove_metadata(uploaded_file, uploaded_file.content_type)
+            cleaned = MetadataRemover.remove_metadata(uploaded_file, uploaded_file.content_type)
             
-            filename_parts = uploaded_file.name.rsplit('.', 1)
-            if len(filename_parts) == 2:
-                clean_filename = f"{filename_parts[0]}_clean.{filename_parts[1]}"
-            else:
-                clean_filename = f"{uploaded_file.name}_clean"
-            
-            file_analysis.cleaned_file.save(clean_filename, cleaned_file, save=False)
+            # Save cleaned
+            clean_name = f"{uploaded_file.name.rsplit('.', 1)[0]}_clean.{uploaded_file.name.rsplit('.', 1)[1]}"
+            file_analysis.cleaned_file.save(clean_name, cleaned)
             file_analysis.metadata_count = len(metadata_entries)
             file_analysis.risk_score = risk_score
             file_analysis.status = 'cleaned'
             file_analysis.save()
             
-            risk_recommendation = RiskAnalyzer.get_risk_recommendation(risk_score)
-            
-            response_data = {
+            return Response({
                 'analysis_id': str(file_analysis.id),
                 'filename': file_analysis.original_filename,
                 'file_type': file_analysis.file_type,
@@ -135,20 +128,23 @@ class AnalyzeFileView(APIView):
                 'risk_score': risk_score,
                 'metadata_count': len(metadata_entries),
                 'metadata_entries': MetadataEntrySerializer(metadata_entries, many=True).data,
-                'risk_recommendation': risk_recommendation,
+                'risk_recommendation': RiskAnalyzer.get_risk_recommendation(risk_score),
                 'share_token': str(file_analysis.share_token)
-            }
-            
-            return Response(response_data, status=status.HTTP_200_OK)
+            }, status=status.HTTP_200_OK)
             
         except Exception as e:
-            file_analysis.status = 'failed'
-            file_analysis.save()
+            if file_analysis:
+                file_analysis.status = 'failed'
+                file_analysis.save()
+            
+            import traceback
+            print("ERROR:", str(e))
+            print(traceback.format_exc())
+            
             return Response(
-                {'error': f'Analysis failed: {str(e)}'},
+                {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
 
 class CleanFileView(APIView):
     
