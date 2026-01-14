@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shared Clean File</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #0f172a;
+            min-height: 100vh;
+            padding: 20px;
+            color: #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .card {
+            background: #1e293b;
+            border-radius: 20px;
+            padding: 50px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            border: 1px solid #334155;
+            text-align: center;
+        }
+
+        .header {
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            color: #94a3b8;
+            font-size: 1.1rem;
+        }
+
+        .file-info {
+            background: #0f172a;
+            padding: 30px;
+            border-radius: 15px;
+            margin: 30px 0;
+            border: 2px solid #334155;
+        }
+
+        .file-info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px 0;
+            border-bottom: 1px solid #334155;
+        }
+
+        .file-info-item:last-child {
+            border-bottom: none;
+        }
+
+        .file-info-label {
+            color: #94a3b8;
+            font-weight: 600;
+        }
+
+        .file-info-value {
+            color: #e2e8f0;
+        }
+
+        .btn {
+            padding: 18px 40px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            margin: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .security-badge {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+            padding: 15px 25px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin: 20px 0;
+            border: 2px solid #22c55e;
+            font-weight: 600;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px;
+        }
+
+        .spinner {
+            width: 70px;
+            height: 70px;
+            border: 4px solid #334155;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: rgba(239, 68, 68, 0.2);
+            border: 2px solid #ef4444;
+            padding: 30px;
+            border-radius: 15px;
+            color: #ef4444;
+        }
+
+        .error h3 {
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .card {
+                padding: 30px 20px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div id="loading" class="loading">
+                <div class="spinner"></div>
+                <p style="margin-top: 15px; color: #94a3b8;">Loading file information...</p>
+            </div>
+
+            <div id="content" class="hidden"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://127.0.0.1:8000/api';
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const pathParts = window.location.pathname.split('/');
+            const shareToken = pathParts[pathParts.indexOf('share') + 1];
+            
+            if (!shareToken) {
+                showError('Invalid share link');
+                return;
+            }
+            
+            loadFileInfo(shareToken);
+        });
+
+        async function loadFileInfo(shareToken) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/share/${shareToken}/`);
+                
+                if (!response.ok) {
+                    throw new Error('File not found or link expired');
+                }
+                
+                const data = await response.json();
+                displayFileInfo(data, shareToken);
+                
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        function displayFileInfo(data, shareToken) {
+            const riskClass = getRiskClass(data.risk_score);
+            const riskLabel = getRiskLabel(data.risk_score);
+            
+            const html = `
+                <div class="header">
+                    <h1>🛡️ Clean File Ready</h1>
+                    <p>This file has been cleaned and is safe to download</p>
+                </div>
+
+                <div class="security-badge">
+                    ✅ All metadata removed • Safe to share
+                </div>
+
+                <div class="file-info">
+                    <div class="file-info-item">
+                        <span class="file-info-label">📄 Filename</span>
+                        <span class="file-info-value">${data.original_filename}</span>
+                    </div>
+                    <div class="file-info-item">
+                        <span class="file-info-label">📦 File Type</span>
+                        <span class="file-info-value">${data.file_type}</span>
+                    </div>
+                    <div class="file-info-item">
+                        <span class="file-info-label">💾 File Size</span>
+                        <span class="file-info-value">${formatFileSize(data.file_size)}</span>
+                    </div>
+                    <div class="file-info-item">
+                        <span class="file-info-label">🗑️ Metadata Removed</span>
+                        <span class="file-info-value">${data.metadata_count} items</span>
+                    </div>
+                    <div class="file-info-item">
+                        <span class="file-info-label">🛡️ Original Risk</span>
+                        <span class="file-info-value">${data.risk_score}/100 (${riskLabel})</span>
+                    </div>
+                </div>
+
+                <div style="margin-top: 40px;">
+                    <button class="btn btn-success" id="downloadBtn">
+                        ⬇️ Download Clean File
+                    </button>
+                    <button class="btn btn-primary" onclick="window.location.href='index.html'">
+                        🔄 Clean Your Own Files
+                    </button>
+                </div>
+
+                <p style="margin-top: 30px; color: #64748b; font-size: 0.9rem;">
+                    This file has been processed through our automated metadata removal system.
+                    All potentially sensitive information has been removed.
+                </p>
+            `;
+            
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('content').classList.remove('hidden');
+            document.getElementById('content').innerHTML = html;
+            
+            document.getElementById('downloadBtn').addEventListener('click', () => downloadFile(shareToken));
+        }
+
+        async function downloadFile(shareToken) {
+            const downloadBtn = document.getElementById('downloadBtn');
+            downloadBtn.disabled = true;
+            downloadBtn.innerHTML = '⏳ Downloading...';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/share/${shareToken}/`, {
+                    method: 'POST'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Download failed');
+                }
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || 'cleaned_file';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                downloadBtn.innerHTML = '✅ Downloaded!';
+                setTimeout(() => {
+                    downloadBtn.innerHTML = '⬇️ Download Clean File';
+                    downloadBtn.disabled = false;
+                }, 3000);
+            } catch (error) {
+                alert('Error: ' + error.message);
+                downloadBtn.innerHTML = '⬇️ Download Clean File';
+                downloadBtn.disabled = false;
+            }
+        }
+
+        function showError(message) {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('content').classList.remove('hidden');
+            document.getElementById('content').innerHTML = `
+                <div class="error">
+                    <h3>❌ Error</h3>
+                    <p>${message}</p>
+                    <button class="btn btn-primary" onclick="window.location.href='index.html'" style="margin-top: 20px;">
+                        Go to Home
+                    </button>
+                </div>
+            `;
+        }
+
+        function getRiskClass(score) {
+            if (score >= 75) return 'risk-critical';
+            if (score >= 50) return 'risk-high';
+            if (score >= 25) return 'risk-medium';
+            return 'risk-low';
+        }
+
+        function getRiskLabel(score) {
+            if (score >= 75) return 'Critical';
+            if (score >= 50) return 'High';
+            if (score >= 25) return 'Medium';
+            return 'Low';
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>

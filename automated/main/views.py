@@ -3,16 +3,18 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.http import FileResponse
+from django.core.files.base import ContentFile
 from .models import FileAnalysis, MetadataEntry, PlatformRule
 from .serializers import (
     FileAnalysisSerializer, MetadataEntrySerializer,
-    FileUploadSerializer, MetadataAnalysisResponseSerializer,
-    CleanFileRequestSerializer, PlatformRuleSerializer
+    FileUploadSerializer, PlatformRuleSerializer
 )
 from .utils.metadata_extractor import MetadataExtractor
 from .utils.metadata_remover import MetadataRemover
 from .utils.risk_analyzer import RiskAnalyzer
+from .utils.qr_generator import QRCodeGenerator
 import io
+
 
 class FileAnalysisViewSet(viewsets.ModelViewSet):
     queryset = FileAnalysis.objects.all()
@@ -23,6 +25,36 @@ class FileAnalysisViewSet(viewsets.ModelViewSet):
         if self.request.user.is_authenticated:
             queryset = queryset.filter(user=self.request.user)
         return queryset
+    
+    @action(detail=True, methods=['get'])
+    def download_clean(self, request, pk=None):
+        file_analysis = self.get_object()
+        
+        if not file_analysis.cleaned_file:
+            return Response(
+                {'error': 'Cleaned file not available'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        return FileResponse(
+            file_analysis.cleaned_file.open('rb'),
+            as_attachment=True,
+            filename=f"clean_{file_analysis.original_filename}"
+        )
+    
+    @action(detail=True, methods=['get'])
+    def qr_code(self, request, pk=None):
+        file_analysis = self.get_object()
+        
+        share_url = request.build_absolute_uri(f'/share/{file_analysis.share_token}/')
+        qr_image = QRCodeGenerator.generate_qr_code(share_url)
+        
+        return FileResponse(
+            qr_image,
+            as_attachment=True,
+            filename=f"qr_{file_analysis.id}.png",
+            content_type='image/png'
+        )
 
 
 class AnalyzeFileView(APIView):
@@ -45,7 +77,10 @@ class AnalyzeFileView(APIView):
             status='pending'
         )
         
+        file_analysis.original_file.save(uploaded_file.name, uploaded_file, save=True)
+        
         try:
+            uploaded_file.seek(0)
             metadata = MetadataExtractor.extract_metadata(uploaded_file, uploaded_file.content_type)
             
             metadata_entries = []
@@ -74,15 +109,25 @@ class AnalyzeFileView(APIView):
             
             risk_score = RiskAnalyzer.calculate_risk_score(metadata_entries_data)
             
+            uploaded_file.seek(0)
+            cleaned_file = MetadataRemover.remove_metadata(uploaded_file, uploaded_file.content_type)
+            
+            filename_parts = uploaded_file.name.rsplit('.', 1)
+            if len(filename_parts) == 2:
+                clean_filename = f"{filename_parts[0]}_clean.{filename_parts[1]}"
+            else:
+                clean_filename = f"{uploaded_file.name}_clean"
+            
+            file_analysis.cleaned_file.save(clean_filename, cleaned_file, save=False)
             file_analysis.metadata_count = len(metadata_entries)
             file_analysis.risk_score = risk_score
-            file_analysis.status = 'analyzed'
+            file_analysis.status = 'cleaned'
             file_analysis.save()
             
             risk_recommendation = RiskAnalyzer.get_risk_recommendation(risk_score)
             
             response_data = {
-                'analysis_id': file_analysis.id,
+                'analysis_id': str(file_analysis.id),
                 'filename': file_analysis.original_filename,
                 'file_type': file_analysis.file_type,
                 'file_size': file_analysis.file_size,
@@ -90,7 +135,8 @@ class AnalyzeFileView(APIView):
                 'risk_score': risk_score,
                 'metadata_count': len(metadata_entries),
                 'metadata_entries': MetadataEntrySerializer(metadata_entries, many=True).data,
-                'risk_recommendation': risk_recommendation
+                'risk_recommendation': risk_recommendation,
+                'share_token': str(file_analysis.share_token)
             }
             
             return Response(response_data, status=status.HTTP_200_OK)
@@ -107,12 +153,13 @@ class AnalyzeFileView(APIView):
 class CleanFileView(APIView):
     
     def post(self, request):
-        serializer = CleanFileRequestSerializer(data=request.data)
+        analysis_id = request.data.get('analysis_id')
         
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        analysis_id = serializer.validated_data['analysis_id']
+        if not analysis_id:
+            return Response(
+                {'error': 'analysis_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         try:
             file_analysis = FileAnalysis.objects.get(id=analysis_id)
@@ -122,9 +169,16 @@ class CleanFileView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        return Response(
-            {'message': 'File cleaning requires original file upload'},
-            status=status.HTTP_400_BAD_REQUEST
+        if not file_analysis.cleaned_file:
+            return Response(
+                {'error': 'Cleaned file not available'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        return FileResponse(
+            file_analysis.cleaned_file.open('rb'),
+            as_attachment=True,
+            filename=f"clean_{file_analysis.original_filename}"
         )
 
 
@@ -137,7 +191,6 @@ class CleanAndDownloadView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         uploaded_file = serializer.validated_data['file']
-        platform = serializer.validated_data.get('platform', 'general')
         
         try:
             cleaned_file = MetadataRemover.remove_metadata(uploaded_file, uploaded_file.content_type)
@@ -162,6 +215,71 @@ class CleanAndDownloadView(APIView):
                 {'error': f'Cleaning failed: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class ShareFileView(APIView):
+    
+    def get(self, request, share_token):
+        try:
+            file_analysis = FileAnalysis.objects.get(share_token=share_token)
+        except FileAnalysis.DoesNotExist:
+            return Response(
+                {'error': 'File not found or link expired'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = FileAnalysisSerializer(file_analysis, context={'request': request})
+        return Response(serializer.data)
+    
+    def post(self, request, share_token):
+        try:
+            file_analysis = FileAnalysis.objects.get(share_token=share_token)
+        except FileAnalysis.DoesNotExist:
+            return Response(
+                {'error': 'File not found or link expired'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        if not file_analysis.cleaned_file:
+            return Response(
+                {'error': 'Cleaned file not available'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        return FileResponse(
+            file_analysis.cleaned_file.open('rb'),
+            as_attachment=True,
+            filename=f"clean_{file_analysis.original_filename}"
+        )
+
+
+class MakePublicView(APIView):
+    
+    def post(self, request, pk):
+        try:
+            file_analysis = FileAnalysis.objects.get(id=pk)
+        except FileAnalysis.DoesNotExist:
+            return Response(
+                {'error': 'File analysis not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        if request.user.is_authenticated and file_analysis.user != request.user:
+            return Response(
+                {'error': 'Permission denied'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        file_analysis.is_public = True
+        file_analysis.save()
+        
+        share_url = request.build_absolute_uri(f'/share/{file_analysis.share_token}/')
+        
+        return Response({
+            'share_token': str(file_analysis.share_token),
+            'share_url': share_url,
+            'is_public': file_analysis.is_public
+        })
 
 
 class PlatformRuleViewSet(viewsets.ModelViewSet):

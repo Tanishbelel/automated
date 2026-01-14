@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from .models import FileAnalysis, MetadataEntry, PlatformRule
+import json
+
 
 class MetadataEntrySerializer(serializers.ModelSerializer):
     class Meta:
@@ -9,15 +11,47 @@ class MetadataEntrySerializer(serializers.ModelSerializer):
 
 class FileAnalysisSerializer(serializers.ModelSerializer):
     metadata_entries = MetadataEntrySerializer(many=True, read_only=True)
+    original_file_url = serializers.SerializerMethodField()
+    cleaned_file_url = serializers.SerializerMethodField()
+    share_url = serializers.SerializerMethodField()
+    qr_code_url = serializers.SerializerMethodField()
     
     class Meta:
         model = FileAnalysis
         fields = [
             'id', 'original_filename', 'file_type', 'file_size',
             'platform', 'status', 'risk_score', 'metadata_count',
-            'metadata_entries', 'created_at', 'updated_at'
+            'metadata_entries', 'original_file_url', 'cleaned_file_url',
+            'share_token', 'share_url', 'qr_code_url', 'is_public',
+            'created_at', 'updated_at'
         ]
-        read_only_fields = ['status', 'risk_score', 'metadata_count']
+        read_only_fields = ['status', 'risk_score', 'metadata_count', 'share_token']
+    
+    def get_original_file_url(self, obj):
+        if obj.original_file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.original_file.url)
+        return None
+    
+    def get_cleaned_file_url(self, obj):
+        if obj.cleaned_file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.cleaned_file.url)
+        return None
+    
+    def get_share_url(self, obj):
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(f'/share/{obj.share_token}/')
+        return None
+    
+    def get_qr_code_url(self, obj):
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(f'/api/analyses/{obj.id}/qr_code/')
+        return None
 
 
 class FileUploadSerializer(serializers.Serializer):
@@ -43,29 +77,29 @@ class FileUploadSerializer(serializers.Serializer):
         return value
 
 
-class MetadataAnalysisResponseSerializer(serializers.Serializer):
-    analysis_id = serializers.IntegerField()
-    filename = serializers.CharField()
-    file_type = serializers.CharField()
-    file_size = serializers.IntegerField()
-    platform = serializers.CharField()
-    risk_score = serializers.IntegerField()
-    metadata_count = serializers.IntegerField()
-    metadata_entries = MetadataEntrySerializer(many=True)
-    risk_recommendation = serializers.DictField()
-
-
-class CleanFileRequestSerializer(serializers.Serializer):
-    analysis_id = serializers.IntegerField()
-    remove_all = serializers.BooleanField(default=True)
-    metadata_keys = serializers.ListField(
-        child=serializers.CharField(),
-        required=False,
-        allow_empty=True
-    )
-
-
 class PlatformRuleSerializer(serializers.ModelSerializer):
+    risky_metadata_keys = serializers.SerializerMethodField()
+    
     class Meta:
         model = PlatformRule
         fields = ['id', 'platform', 'risky_metadata_keys', 'description', 'is_active']
+    
+    def get_risky_metadata_keys(self, obj):
+        return obj.get_risky_keys()
+    
+    def create(self, validated_data):
+        risky_keys = validated_data.pop('risky_metadata_keys', [])
+        instance = PlatformRule.objects.create(**validated_data)
+        instance.set_risky_keys(risky_keys)
+        instance.save()
+        return instance
+    
+    def update(self, instance, validated_data):
+        risky_keys = validated_data.pop('risky_metadata_keys', None)
+        if risky_keys is not None:
+            instance.set_risky_keys(risky_keys)
+        
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
