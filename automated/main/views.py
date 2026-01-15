@@ -14,6 +14,7 @@ from .utils.metadata_remover import MetadataRemover
 from .utils.risk_analyzer import RiskAnalyzer
 from .utils.qr_generator import QRCodeGenerator
 import io
+from .utils.encryption_handler import EncryptionHandler, PasswordStrengthValidator
 
 
 class FileAnalysisViewSet(viewsets.ModelViewSet):
@@ -313,3 +314,143 @@ class HealthCheckView(APIView):
             'service': 'Automated Metadata Removal API',
             'version': '1.0.0'
         })
+    
+
+
+
+class EncryptFileView(APIView):
+    """Encrypt and password-protect files"""
+    
+    def post(self, request):
+        uploaded_file = request.FILES.get('file')
+        password = request.data.get('password')
+        method = request.data.get('method', 'encrypt')  # 'encrypt', 'pdf', or 'zip'
+        
+        if not uploaded_file:
+            return Response(
+                {'error': 'No file provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not password:
+            return Response(
+                {'error': 'Password is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Encrypt the file
+            encrypted_file = EncryptionHandler.protect_file(
+                uploaded_file,
+                uploaded_file.name,
+                password,
+                method
+            )
+            
+            # Generate encrypted filename
+            name_parts = uploaded_file.name.rsplit('.', 1)
+            if method == 'zip':
+                encrypted_filename = f"{name_parts[0]}_protected.zip"
+            elif method == 'encrypt':
+                encrypted_filename = f"{name_parts[0]}_encrypted.enc"
+            else:
+                encrypted_filename = f"{name_parts[0]}_protected.{name_parts[1] if len(name_parts) > 1 else 'pdf'}"
+            
+            response = FileResponse(
+                encrypted_file,
+                as_attachment=True,
+                filename=encrypted_filename
+            )
+            
+            return response
+        
+        except Exception as e:
+            import traceback
+            print("Encryption Error:", str(e))
+            print(traceback.format_exc())
+            
+            return Response(
+                {'error': f'Encryption failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class DecryptFileView(APIView):
+    """Decrypt password-protected files"""
+    
+    def post(self, request):
+        uploaded_file = request.FILES.get('file')
+        password = request.data.get('password')
+        original_filename = request.data.get('original_filename', '')  # Optional: user can provide original name
+        
+        if not uploaded_file:
+            return Response(
+                {'error': 'No file provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not password:
+            return Response(
+                {'error': 'Password is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Decrypt the file
+            decrypted_file = EncryptionHandler.decrypt_file(uploaded_file, password)
+            
+            # Try to determine original filename
+            if original_filename:
+                # User provided the original filename
+                filename = original_filename
+            else:
+                # Try to extract from uploaded filename
+                uploaded_name = uploaded_file.name
+                
+                # Remove common encryption suffixes
+                if uploaded_name.endswith('_encrypted.enc'):
+                    filename = uploaded_name.replace('_encrypted.enc', '')
+                elif uploaded_name.endswith('.enc'):
+                    filename = uploaded_name.replace('.enc', '')
+                elif uploaded_name.endswith('_protected.zip'):
+                    filename = uploaded_name.replace('_protected.zip', '')
+                elif uploaded_name.endswith('_protected.pdf'):
+                    filename = uploaded_name.replace('_protected.pdf', '.pdf')
+                else:
+                    # Default: remove _protected or add _decrypted
+                    filename = uploaded_name.replace('_protected', '_decrypted')
+            
+            response = FileResponse(
+                decrypted_file,
+                as_attachment=True,
+                filename=filename
+            )
+            
+            return response
+        
+        except Exception as e:
+            import traceback
+            print("Decryption Error:", str(e))
+            print(traceback.format_exc())
+            
+            return Response(
+                {'error': 'Decryption failed: Wrong password or corrupted file'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+
+class ValidatePasswordView(APIView):
+    """Validate password strength"""
+    
+    def post(self, request):
+        password = request.data.get('password')
+        
+        if not password:
+            return Response(
+                {'error': 'Password is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        validation = PasswordStrengthValidator.validate_password(password)
+        
+        return Response(validation)

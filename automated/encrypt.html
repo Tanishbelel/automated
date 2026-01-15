@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>File Encryption Tool</title>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+    font-family:system-ui,Segoe UI,Roboto;
+    background:#0f172a;
+    color:#e2e8f0;
+    padding:20px;
+}
+.container{max-width:900px;margin:auto;padding-top:60px}
+.header{text-align:center;margin-bottom:50px}
+.header h1{
+    font-size:3rem;
+    background:linear-gradient(135deg,#f59e0b,#ef4444);
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+    background-clip:text;
+}
+.header p{color:#94a3b8;font-size:1.2rem}
+
+.back-btn{
+    position:fixed;
+    top:20px;
+    left:20px;
+    background:#1e293b;
+    color:#e2e8f0;
+    padding:12px 24px;
+    border-radius:10px;
+    border:2px solid #334155;
+    cursor:pointer;
+    font-size:1rem;
+    transition:.3s;
+}
+.back-btn:hover{
+    border-color:#667eea;
+    transform:translateY(-2px);
+}
+
+.card{
+    background:#1e293b;
+    padding:50px;
+    border-radius:20px;
+    border:1px solid #334155;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+    margin-bottom:30px;
+}
+
+.tabs{
+    display:flex;
+    gap:15px;
+    margin-bottom:30px;
+}
+
+.tab{
+    flex:1;
+    padding:15px;
+    background:#0f172a;
+    border:2px solid #334155;
+    border-radius:10px;
+    cursor:pointer;
+    text-align:center;
+    transition:.3s;
+}
+
+.tab.active{
+    background:linear-gradient(135deg,#f59e0b,#ef4444);
+    border-color:transparent;
+    color:#fff;
+}
+
+.upload{
+    border:3px dashed #475569;
+    padding:80px 40px;
+    border-radius:15px;
+    text-align:center;
+    cursor:pointer;
+    transition:.3s;
+    background:#0f172a;
+}
+.upload:hover{border-color:#f59e0b}
+.upload.drag{background:#1e293b}
+.upload-icon{font-size:5rem;margin-bottom:20px}
+
+.input-group{
+    margin-top:25px;
+}
+
+.input-group label{
+    display:block;
+    margin-bottom:8px;
+    color:#94a3b8;
+    font-size:.95rem;
+}
+
+input[type="password"],select{
+    width:100%;
+    padding:16px;
+    border-radius:10px;
+    font-size:1.05rem;
+    background:#0f172a;
+    color:#e2e8f0;
+    border:2px solid #334155;
+}
+
+.password-strength{
+    margin-top:10px;
+    padding:10px;
+    border-radius:8px;
+    font-size:.9rem;
+}
+
+.strength-weak{background:rgba(239,68,68,.2);color:#ef4444}
+.strength-fair{background:rgba(251,191,36,.2);color:#fbbf24}
+.strength-good{background:rgba(34,197,94,.2);color:#22c65e}
+.strength-strong{background:rgba(34,197,94,.3);color:#22c65e}
+
+button{
+    width:100%;
+    padding:16px;
+    margin-top:25px;
+    border-radius:10px;
+    font-size:1.05rem;
+    border:none;
+    cursor:pointer;
+    background:linear-gradient(135deg,#f59e0b,#ef4444);
+    color:#fff;
+    font-weight:600;
+    transition:.3s;
+}
+
+button:hover:not(:disabled){
+    transform:translateY(-2px);
+    box-shadow:0 10px 25px rgba(245,158,11,.3);
+}
+
+button:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+.loading{text-align:center;padding:60px}
+.spinner{
+    width:70px;height:70px;
+    border:4px solid #334155;
+    border-top:4px solid #f59e0b;
+    border-radius:50%;
+    animation:spin 1s linear infinite;
+    margin:auto;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.hidden{display:none}
+
+.success{
+    background:rgba(34,197,94,.2);
+    border:2px solid #22c65e;
+    padding:20px;
+    border-radius:10px;
+    text-align:center;
+    color:#22c65e;
+}
+
+.error{
+    background:rgba(239,68,68,.2);
+    border:2px solid #ef4444;
+    padding:15px;
+    border-radius:10px;
+    margin-bottom:20px;
+    color:#ef4444;
+}
+
+.info-box{
+    background:#0f172a;
+    border:2px solid #334155;
+    padding:20px;
+    border-radius:10px;
+    margin-top:25px;
+}
+
+.info-box h3{
+    color:#f59e0b;
+    margin-bottom:10px;
+}
+
+.info-box ul{
+    list-style:none;
+    padding-left:0;
+}
+
+.info-box li{
+    padding:8px 0;
+    color:#94a3b8;
+}
+
+.info-box li:before{
+    content:"🔒 ";
+    margin-right:8px;
+}
+
+.method-selector{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:15px;
+    margin-top:15px;
+}
+
+.method-option{
+    background:#0f172a;
+    padding:20px;
+    border:2px solid #334155;
+    border-radius:10px;
+    cursor:pointer;
+    text-align:center;
+    transition:.3s;
+}
+
+.method-option:hover{
+    border-color:#f59e0b;
+}
+
+.method-option.selected{
+    border-color:#f59e0b;
+    background:rgba(245,158,11,.1);
+}
+
+.method-option h4{
+    font-size:2rem;
+    margin-bottom:8px;
+}
+
+.method-option p{
+    font-size:.85rem;
+    color:#94a3b8;
+}
+</style>
+</head>
+
+<body>
+<button class="back-btn" onclick="window.location.href='index.html'">
+    ← Back to Home
+</button>
+
+<div class="container">
+    <div class="header">
+        <h1>🔒 File Encryption</h1>
+        <p>Password protect and encrypt your files</p>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <div class="tab active" id="encryptTab">
+            🔒 Encrypt File
+        </div>
+        <div class="tab" id="decryptTab">
+            🔓 Decrypt File
+        </div>
+    </div>
+
+    <!-- Encrypt Section -->
+    <div class="card" id="encryptSection">
+        <div id="encryptForm">
+            <div id="error"></div>
+
+            <div class="upload" id="uploadArea">
+                <div class="upload-icon">📁</div>
+                <p><strong>Click to upload</strong> or drag & drop</p>
+                <p style="color:#64748b">Any file type supported</p>
+            </div>
+
+            <input type="file" id="fileInput" hidden>
+
+            <div class="input-group">
+                <label>Encryption Method</label>
+                <div class="method-selector">
+                    <div class="method-option selected" data-method="encrypt">
+                        <h4>🔐</h4>
+                        <p><strong>Universal</strong></p>
+                        <p>Works with all files</p>
+                    </div>
+                    <div class="method-option" data-method="pdf">
+                        <h4>📄</h4>
+                        <p><strong>PDF Native</strong></p>
+                        <p>PDF files only</p>
+                    </div>
+                    <div class="method-option" data-method="zip">
+                        <h4>📦</h4>
+                        <p><strong>ZIP Archive</strong></p>
+                        <p>Create protected ZIP</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="password" placeholder="Enter a strong password">
+                <div id="passwordStrength"></div>
+            </div>
+
+            <div class="input-group">
+                <label>Confirm Password</label>
+                <input type="password" id="confirmPassword" placeholder="Re-enter password">
+            </div>
+
+            <button id="encryptBtn" disabled>🔒 Encrypt & Download</button>
+
+            <div class="info-box">
+                <h3>Password Requirements</h3>
+                <ul>
+                    <li>At least 8 characters long</li>
+                    <li>Include uppercase and lowercase letters</li>
+                    <li>Include at least one number</li>
+                    <li>Include at least one special character (!@#$%^&*)</li>
+                </ul>
+            </div>
+        </div>
+
+        <div id="loading" class="hidden loading">
+            <div class="spinner"></div>
+            <p style="margin-top:15px;color:#94a3b8">
+                Encrypting your file…
+            </p>
+        </div>
+
+        <div id="success" class="hidden success">
+            <h2 style="margin-bottom:10px">✅ File Encrypted Successfully!</h2>
+            <p>Your encrypted file has been downloaded.</p>
+            <button onclick="location.reload()" style="margin-top:20px">
+                Encrypt Another File
+            </button>
+        </div>
+    </div>
+
+    <!-- Decrypt Section -->
+    <div class="card hidden" id="decryptSection">
+        <div id="decryptForm">
+            <div id="decryptError"></div>
+
+            <div class="upload" id="decryptUploadArea">
+                <div class="upload-icon">🔓</div>
+                <p><strong>Click to upload encrypted file</strong></p>
+                <p style="color:#64748b">Select your .enc or protected file</p>
+            </div>
+
+            <input type="file" id="decryptFileInput" hidden>
+
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="decryptPassword" placeholder="Enter decryption password">
+            </div>
+
+            <button id="decryptBtn" disabled>🔓 Decrypt & Download</button>
+        </div>
+
+        <div id="decryptLoading" class="hidden loading">
+            <div class="spinner"></div>
+            <p style="margin-top:15px;color:#94a3b8">
+                Decrypting your file…
+            </p>
+        </div>
+
+        <div id="decryptSuccess" class="hidden success">
+            <h2 style="margin-bottom:10px">✅ File Decrypted Successfully!</h2>
+            <p>Your decrypted file has been downloaded.</p>
+            <button onclick="location.reload()" style="margin-top:20px">
+                Decrypt Another File
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+const API="http://127.0.0.1:8000/api";
+let selectedFile=null;
+let selectedMethod='encrypt';
+let decryptFile=null;
+
+// Tab switching
+document.getElementById('encryptTab').onclick=()=>{
+    document.getElementById('encryptTab').classList.add('active');
+    document.getElementById('decryptTab').classList.remove('active');
+    document.getElementById('encryptSection').classList.remove('hidden');
+    document.getElementById('decryptSection').classList.add('hidden');
+};
+
+document.getElementById('decryptTab').onclick=()=>{
+    document.getElementById('decryptTab').classList.add('active');
+    document.getElementById('encryptTab').classList.remove('active');
+    document.getElementById('decryptSection').classList.remove('hidden');
+    document.getElementById('encryptSection').classList.add('hidden');
+};
+
+// Method selection
+document.querySelectorAll('.method-option').forEach(opt=>{
+    opt.onclick=function(){
+        document.querySelectorAll('.method-option').forEach(o=>o.classList.remove('selected'));
+        this.classList.add('selected');
+        selectedMethod=this.dataset.method;
+    };
+});
+
+// ENCRYPT - File upload
+const uploadArea=document.getElementById("uploadArea");
+const fileInput=document.getElementById("fileInput");
+
+uploadArea.onclick=()=>fileInput.click();
+fileInput.onchange=e=>handleFile(e.target.files[0]);
+
+["dragover","dragenter"].forEach(ev=>{
+    uploadArea.addEventListener(ev,e=>{
+        e.preventDefault();
+        uploadArea.classList.add("drag");
+    });
+});
+["dragleave","drop"].forEach(ev=>{
+    uploadArea.addEventListener(ev,e=>{
+        e.preventDefault();
+        uploadArea.classList.remove("drag");
+    });
+});
+uploadArea.addEventListener("drop",e=>{
+    handleFile(e.dataTransfer.files[0]);
+});
+
+function handleFile(file){
+    if(!file)return;
+    selectedFile=file;
+    uploadArea.innerHTML=`
+        <div class="upload-icon">✅</div>
+        <p><strong>${file.name}</strong></p>
+        <p style="color:#64748b">${format(file.size)}</p>
+    `;
+    checkEncryptForm();
+}
+
+// DECRYPT - File upload
+const decryptUploadArea=document.getElementById("decryptUploadArea");
+const decryptFileInput=document.getElementById("decryptFileInput");
+
+decryptUploadArea.onclick=()=>decryptFileInput.click();
+decryptFileInput.onchange=e=>handleDecryptFile(e.target.files[0]);
+
+function handleDecryptFile(file){
+    if(!file)return;
+    decryptFile=file;
+    decryptUploadArea.innerHTML=`
+        <div class="upload-icon">✅</div>
+        <p><strong>${file.name}</strong></p>
+        <p style="color:#64748b">${format(file.size)}</p>
+    `;
+    checkDecryptForm();
+}
+
+function format(bytes){
+    const k=1024,s=["B","KB","MB","GB"];
+    const i=Math.floor(Math.log(bytes)/Math.log(k));
+    return (bytes/Math.pow(k,i)).toFixed(2)+" "+s[i];
+}
+
+// Password strength validation
+const password=document.getElementById('password');
+const confirmPassword=document.getElementById('confirmPassword');
+const strengthDiv=document.getElementById('passwordStrength');
+
+let passwordValidation={is_valid:false};
+
+password.oninput=()=>{
+    const pass=password.value;
+    if(!pass){
+        strengthDiv.innerHTML='';
+        passwordValidation={is_valid:false};
+        checkEncryptForm();
+        return;
+    }
+
+    // Client-side validation
+    let strength=0;
+    let errors=[];
+    
+    if(pass.length>=8){
+        strength++;
+    }else{
+        errors.push('At least 8 characters');
+    }
+    
+    if(/[A-Z]/.test(pass)){
+        strength++;
+    }else{
+        errors.push('Uppercase letter required');
+    }
+    
+    if(/[a-z]/.test(pass)){
+        strength++;
+    }else{
+        errors.push('Lowercase letter required');
+    }
+    
+    if(/[0-9]/.test(pass)){
+        strength++;
+    }else{
+        errors.push('Number required');
+    }
+    
+    if(/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(pass)){
+        strength++;
+    }else{
+        errors.push('Special character required');
+    }
+
+    const labels=['Very Weak','Weak','Fair','Good','Strong','Very Strong'];
+    let className='strength-weak';
+    if(strength>=4)className='strength-strong';
+    else if(strength>=3)className='strength-good';
+    else if(strength>=2)className='strength-fair';
+
+    passwordValidation={
+        is_valid:errors.length===0,
+        strength:strength,
+        strength_label:labels[strength],
+        errors:errors
+    };
+
+    strengthDiv.innerHTML=`
+        <div class="password-strength ${className}">
+            <strong>${labels[strength]}</strong>
+            ${errors.length?'<br>'+errors.join(', '):'<br>✓ Password meets all requirements'}
+        </div>
+    `;
+    
+    checkEncryptForm();
+};
+
+confirmPassword.oninput=checkEncryptForm;
+
+function checkEncryptForm(){
+    const btn=document.getElementById('encryptBtn');
+    const pass=password.value;
+    const conf=confirmPassword.value;
+    
+    btn.disabled=!(
+        selectedFile &&
+        pass &&
+        conf &&
+        pass===conf &&
+        passwordValidation.is_valid
+    );
+}
+
+function checkDecryptForm(){
+    const btn=document.getElementById('decryptBtn');
+    const pass=document.getElementById('decryptPassword').value;
+    
+    btn.disabled=!(decryptFile && pass);
+}
+
+document.getElementById('decryptPassword').oninput=checkDecryptForm;
+
+// Encrypt button
+document.getElementById('encryptBtn').onclick=async()=>{
+    const pass=password.value;
+    const conf=confirmPassword.value;
+
+    if(pass!==conf){
+        document.getElementById('error').innerHTML=
+            `<div class="error">❌ Passwords do not match</div>`;
+        return;
+    }
+
+    document.getElementById('encryptForm').classList.add('hidden');
+    document.getElementById('loading').classList.remove('hidden');
+
+    const fd=new FormData();
+    fd.append('file',selectedFile);
+    fd.append('password',pass);
+    fd.append('method',selectedMethod);
+
+    try{
+        const r=await fetch(`${API}/encrypt/`,{method:'POST',body:fd});
+        
+        if(!r.ok){
+            const err=await r.json();
+            throw new Error(err.error || 'Encryption failed');
+        }
+
+        // Download the encrypted file
+        const blob=await r.blob();
+        const url=window.URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=url;
+        
+        // Get filename from Content-Disposition header or create one
+        const disposition=r.headers.get('Content-Disposition');
+        let filename='encrypted_file';
+        if(disposition){
+            const match=disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+            if(match)filename=match[1].replace(/['"]/g,'');
+        }
+        
+        a.download=filename;
+        a.click();
+        window.URL.revokeObjectURL(url);
+
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('success').classList.remove('hidden');
+
+    }catch(e){
+        console.error('Error:',e);
+        document.getElementById('error').innerHTML=
+            `<div class="error">❌ ${e.message}</div>`;
+        document.getElementById('encryptForm').classList.remove('hidden');
+        document.getElementById('loading').classList.add('hidden');
+    }
+};
+
+// Decrypt button
+document.getElementById('decryptBtn').onclick=async()=>{
+    const pass=document.getElementById('decryptPassword').value;
+
+    document.getElementById('decryptForm').classList.add('hidden');
+    document.getElementById('decryptLoading').classList.remove('hidden');
+
+    const fd=new FormData();
+    fd.append('file',decryptFile);
+    fd.append('password',pass);
+
+    try{
+        const r=await fetch(`${API}/decrypt/`,{method:'POST',body:fd});
+        
+        if(!r.ok){
+            throw new Error('Wrong password or corrupted file');
+        }
+
+        // Download the decrypted file
+        const blob=await r.blob();
+        const url=window.URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=url;
+        
+        const disposition=r.headers.get('Content-Disposition');
+        let filename='decrypted_file';
+        if(disposition){
+            const match=disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+            if(match)filename=match[1].replace(/['"]/g,'');
+        }
+        
+        a.download=filename;
+        a.click();
+        window.URL.revokeObjectURL(url);
+
+        document.getElementById('decryptLoading').classList.add('hidden');
+        document.getElementById('decryptSuccess').classList.remove('hidden');
+
+    }catch(e){
+        console.error('Error:',e);
+        document.getElementById('decryptError').innerHTML=
+            `<div class="error">❌ ${e.message}</div>`;
+        document.getElementById('decryptForm').classList.remove('hidden');
+        document.getElementById('decryptLoading').classList.add('hidden');
+    }
+};
+</script>
+</body>
+</html>

@@ -66,9 +66,52 @@ button{
     background:linear-gradient(135deg,#667eea,#764ba2);
     color:#fff;
     font-weight:600;
+    transition:.3s;
 }
 
-button:disabled{opacity:.4;cursor:not-allowed}
+button:hover{
+    transform:translateY(-2px);
+    box-shadow:0 10px 25px rgba(102,126,234,.3);
+}
+
+button:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+.secondary-btn{
+    background:linear-gradient(135deg,#f59e0b,#ef4444);
+    margin-top:15px;
+}
+
+.feature-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:15px;
+    margin-top:30px;
+}
+
+.feature-card{
+    background:#0f172a;
+    padding:25px;
+    border-radius:12px;
+    border:2px solid #334155;
+    text-align:center;
+    cursor:pointer;
+    transition:.3s;
+}
+
+.feature-card:hover{
+    border-color:#667eea;
+    transform:translateY(-5px);
+}
+
+.feature-card h3{
+    font-size:2.5rem;
+    margin-bottom:10px;
+}
+
+.feature-card p{
+    color:#94a3b8;
+    font-size:.95rem;
+}
 
 .loading{text-align:center;padding:60px}
 .spinner{
@@ -97,6 +140,20 @@ button:disabled{opacity:.4;cursor:not-allowed}
     <div class="header">
         <h1>🛡️ Metadata Removal Tool</h1>
         <p>Analyze & remove hidden metadata from your files</p>
+    </div>
+
+    <!-- Feature Selection -->
+    <div class="feature-grid" style="margin-bottom:30px">
+        <div class="feature-card" onclick="window.location.href='index.html'">
+            <h3>🔍</h3>
+            <p><strong>Metadata Removal</strong></p>
+            <p>Remove hidden data from files</p>
+        </div>
+        <div class="feature-card" onclick="window.location.href='encrypt.html'">
+            <h3>🔒</h3>
+            <p><strong>File Encryption</strong></p>
+            <p>Password protect your files</p>
+        </div>
     </div>
 
     <div class="card">

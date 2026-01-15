@@ -1,6 +1,8 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
+    DecryptFileView,
+    EncryptFileView,
     FileAnalysisViewSet,
     AnalyzeFileView,
     CleanFileView,
@@ -8,7 +10,8 @@ from .views import (
     ShareFileView,
     MakePublicView,
     PlatformRuleViewSet,
-    HealthCheckView
+    HealthCheckView,
+    ValidatePasswordView
 )
 
 router = DefaultRouter()
@@ -23,4 +26,7 @@ urlpatterns = [
     path('share/<uuid:share_token>/', ShareFileView.as_view(), name='share-file'),
     path('make-public/<uuid:pk>/', MakePublicView.as_view(), name='make-public'),
     path('health/', HealthCheckView.as_view(), name='health-check'),
+    path('encrypt/', EncryptFileView.as_view(), name='encrypt-file'),
+    path('decrypt/', DecryptFileView.as_view(), name='decrypt-file'),
+    path('validate-password/', ValidatePasswordView.as_view(), name='validate-password'),
 ]
