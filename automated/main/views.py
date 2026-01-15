@@ -107,9 +107,13 @@ class AnalyzeFileView(APIView):
             metadata_data = [{'category': e.category} for e in metadata_entries]
             risk_score = RiskAnalyzer.calculate_risk_score(metadata_data)
             
-            # Remove metadata
+            # Remove metadata - UPDATED LINE
             uploaded_file.seek(0)
-            cleaned = MetadataRemover.remove_metadata(uploaded_file, uploaded_file.content_type)
+            cleaned = MetadataRemover.remove_metadata(
+                uploaded_file, 
+                uploaded_file.content_type,
+                uploaded_file.name  # Pass the original filename
+            )
             
             # Save cleaned
             clean_name = f"{uploaded_file.name.rsplit('.', 1)[0]}_clean.{uploaded_file.name.rsplit('.', 1)[1]}"
@@ -189,7 +193,12 @@ class CleanAndDownloadView(APIView):
         uploaded_file = serializer.validated_data['file']
         
         try:
-            cleaned_file = MetadataRemover.remove_metadata(uploaded_file, uploaded_file.content_type)
+            # UPDATED LINE - Pass the original filename
+            cleaned_file = MetadataRemover.remove_metadata(
+                uploaded_file, 
+                uploaded_file.content_type,
+                uploaded_file.name  # Pass the original filename
+            )
             
             filename_parts = uploaded_file.name.rsplit('.', 1)
             if len(filename_parts) == 2:
