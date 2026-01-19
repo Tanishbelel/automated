@@ -1,0 +1,48 @@
+name: metadata_remover
+description: A Flutter app for automated metadata removal
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+
+  # HTTP & API
+  http: ^1.1.0
+  dio: ^5.4.0
+  universal_html: ^2.3.0
+
+  # File handling
+  file_picker: ^6.5.1
+  path_provider: ^2.1.1
+  open_file: ^3.3.2
+
+  # State management
+  provider: ^6.1.1
+
+  # UI Components
+  flutter_svg: ^2.0.9
+  cached_network_image: ^3.3.0
+
+  # QR Code
+  qr_flutter: ^4.1.0
+
+
+  # Utilities
+  uuid: ^4.2.2
+  intl: ^0.18.1
+  share_plus: ^7.2.1
+  url_launcher: ^6.2.2
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true

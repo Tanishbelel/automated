@@ -1,0 +1,25 @@
+class ApiConfig {
+  // Change this to your Django backend URL
+  static const String baseUrl = 'http://192.168.29.147:8000/api';// For Android Emulator
+  // static const String baseUrl = 'http://localhost:8000/api'; // For iOS Simulator
+  // static const String baseUrl = 'https://your-domain.com/api'; // For production
+
+  // Endpoints
+  static const String analyze = '/analyze/';
+  static const String clean = '/clean/';
+  static const String cleanDownload = '/clean-download/';
+  static const String encrypt = '/encrypt/';
+  static const String decrypt = '/decrypt/';
+  static const String validatePassword = '/validate-password/';
+  static const String analyses = '/analyses/';
+  static const String share = '/share/';
+  static const String makePublic = '/make-public/';
+  static const String health = '/health/';
+
+  // Timeouts
+  static const Duration connectionTimeout = Duration(seconds: 30);
+  static const Duration receiveTimeout = Duration(seconds: 30);
+
+  // Build full URL
+  static String getUrl(String endpoint) => baseUrl + endpoint;
+}
