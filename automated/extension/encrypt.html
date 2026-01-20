@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Encryption Tool</title>
+    <link rel="stylesheet" href="encrypt.css">
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">🔐</div>
+            <h1>File Encryption</h1>
+            <p class="tagline">Secure your files locally</p>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="tab-nav">
+            <button class="tab-btn active" data-tab="encrypt">
+                <span class="tab-icon">🔒</span>
+                <span>Encrypt</span>
+            </button>
+            <button class="tab-btn" data-tab="decrypt">
+                <span class="tab-icon">🔓</span>
+                <span>Decrypt</span>
+            </button>
+            <a href="popup.html" class="tab-btn tab-link">
+                <span class="tab-icon">📊</span>
+                <span>Metadata</span>
+            </a>
+        </div>
+
+        <!-- Encrypt Tab -->
+        <div class="tab-content active" id="encryptTab">
+            <div class="section">
+                <div id="encryptError" class="error-message hidden"></div>
+                <div id="encryptSuccess" class="success-message hidden"></div>
+
+                <!-- File Upload -->
+                <div class="upload-area" id="encryptUploadArea">
+                    <div class="upload-icon">📁</div>
+                    <p class="upload-text"><strong>Click to upload</strong></p>
+                    <p class="upload-hint">or drag & drop</p>
+                    <p class="upload-formats">Any file type • Max 100MB</p>
+                </div>
+                <input type="file" id="encryptFileInput" hidden>
+
+                <!-- Selected File Display -->
+                <div id="encryptSelectedFile" class="selected-file hidden">
+                    <div class="file-icon">📄</div>
+                    <div class="file-info">
+                        <p class="file-name" id="encryptFileName"></p>
+                        <p class="file-size" id="encryptFileSize"></p>
+                    </div>
+                    <button class="remove-file" id="encryptRemoveFile">✕</button>
+                </div>
+
+                <!-- Password Fields -->
+                <div class="password-section">
+                    <div class="input-group">
+                        <label for="encryptPassword">
+                            <span class="label-icon">🔑</span> Password
+                        </label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="encryptPassword" placeholder="Enter a strong password">
+                            <button class="toggle-password" data-target="encryptPassword">👁️</button>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="encryptPasswordConfirm">
+                            <span class="label-icon">🔑</span> Confirm Password
+                        </label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="encryptPasswordConfirm" placeholder="Confirm your password">
+                            <button class="toggle-password" data-target="encryptPasswordConfirm">👁️</button>
+                        </div>
+                    </div>
+
+                    <!-- Password Strength Indicator -->
+                    <div class="password-strength" id="passwordStrength">
+                        <div class="strength-bar">
+                            <div class="strength-fill" id="strengthFill"></div>
+                        </div>
+                        <span class="strength-text" id="strengthText">Password strength</span>
+                    </div>
+                </div>
+
+                <!-- Encrypt Button -->
+                <button id="encryptBtn" class="btn-primary" disabled>
+                    <span class="btn-icon">🔒</span>
+                    <span>Encrypt & Download</span>
+                </button>
+
+                <!-- Info Banner -->
+                <div class="info-banner">
+                    <span class="info-icon">⚡</span>
+                    <span>Encrypted locally • Never uploaded • 100% private</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Decrypt Tab -->
+        <div class="tab-content" id="decryptTab">
+            <div class="section">
+                <div id="decryptError" class="error-message hidden"></div>
+                <div id="decryptSuccess" class="success-message hidden"></div>
+
+                <!-- File Upload -->
+                <div class="upload-area" id="decryptUploadArea">
+                    <div class="upload-icon">🔐</div>
+                    <p class="upload-text"><strong>Upload encrypted file</strong></p>
+                    <p class="upload-hint">or drag & drop</p>
+                    <p class="upload-formats">.enc files only</p>
+                </div>
+                <input type="file" id="decryptFileInput" accept=".enc" hidden>
+
+                <!-- Selected File Display -->
+                <div id="decryptSelectedFile" class="selected-file hidden">
+                    <div class="file-icon">🔐</div>
+                    <div class="file-info">
+                        <p class="file-name" id="decryptFileName"></p>
+                        <p class="file-size" id="decryptFileSize"></p>
+                    </div>
+                    <button class="remove-file" id="decryptRemoveFile">✕</button>
+                </div>
+
+                <!-- Password Field -->
+                <div class="password-section">
+                    <div class="input-group">
+                        <label for="decryptPassword">
+                            <span class="label-icon">🔑</span> Password
+                        </label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="decryptPassword" placeholder="Enter decryption password">
+                            <button class="toggle-password" data-target="decryptPassword">👁️</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Decrypt Button -->
+                <button id="decryptBtn" class="btn-primary" disabled>
+                    <span class="btn-icon">🔓</span>
+                    <span>Decrypt & Download</span>
+                </button>
+
+                <!-- Info Banner -->
+                <div class="info-banner">
+                    <span class="info-icon">ℹ️</span>
+                    <span>Enter the password used during encryption</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loadingOverlay" class="loading-overlay hidden">
+            <div class="loading-content">
+                <div class="loading-spinner"></div>
+                <p class="loading-text" id="loadingText">Processing...</p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>🔒 AES-256-GCM Encryption • Your files never leave your device</p>
+        </div>
+    </div>
+
+    <script src="crypto.js"></script>
+    <script src="encrypt.js"></script>
+</body>
+
+</html>

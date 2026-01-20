@@ -2,7 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.http import FileResponse
+from django.http import FileResponse, StreamingHttpResponse
 from django.core.files.base import ContentFile
 from .models import FileAnalysis, MetadataEntry, PlatformRule
 from .serializers import (
@@ -14,7 +14,18 @@ from .utils.metadata_remover import MetadataRemover
 from .utils.risk_analyzer import RiskAnalyzer
 from .utils.qr_generator import QRCodeGenerator
 import io
+import os
+import tempfile
 from .utils.encryption_handler import EncryptionHandler, PasswordStrengthValidator
+
+
+def file_iterator(file_object, chunk_size=8192):
+    """Generator to read file in chunks to avoid memory issues."""
+    while True:
+        data = file_object.read(chunk_size)
+        if not data:
+            break
+        yield data
 
 
 class FileAnalysisViewSet(viewsets.ModelViewSet):
@@ -37,11 +48,25 @@ class FileAnalysisViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        return FileResponse(
-            file_analysis.cleaned_file.open('rb'),
-            as_attachment=True,
-            filename=f"clean_{file_analysis.original_filename}"
-        )
+        # Check file size for streaming
+        file_size = file_analysis.cleaned_file.size
+        
+        if file_size > 10 * 1024 * 1024:  # > 10MB, use streaming
+            response = StreamingHttpResponse(
+                file_iterator(file_analysis.cleaned_file.open('rb')),
+                content_type=file_analysis.file_type
+            )
+            response['Content-Disposition'] = f'attachment; filename="clean_{file_analysis.original_filename}"'
+            response['Content-Length'] = file_size
+        else:
+            response = FileResponse(
+                file_analysis.cleaned_file.open('rb'),
+                as_attachment=True,
+                filename=f"clean_{file_analysis.original_filename}"
+            )
+            response['Content-Length'] = file_size
+        
+        return response
     
     @action(detail=True, methods=['get'])
     def qr_code(self, request, pk=None):
@@ -70,6 +95,7 @@ class AnalyzeFileView(APIView):
         platform = serializer.validated_data.get('platform', 'general')
         
         file_analysis = None
+        temp_file = None
         
         try:
             # Create record
@@ -82,14 +108,38 @@ class AnalyzeFileView(APIView):
                 status='pending'
             )
             
-            # Save original
-            file_analysis.original_file.save(uploaded_file.name, uploaded_file)
+            # For large files (> 10MB), use temporary storage
+            is_large_file = uploaded_file.size > 10 * 1024 * 1024
             
-            # Extract metadata
-            uploaded_file.seek(0)
-            metadata = MetadataExtractor.extract_metadata(uploaded_file, uploaded_file.content_type)
+            if is_large_file:
+                # Create temp file
+                temp_file = tempfile.NamedTemporaryFile(
+                    delete=False, 
+                    suffix=os.path.splitext(uploaded_file.name)[1]
+                )
+                
+                # Save uploaded file to temp in chunks
+                for chunk in uploaded_file.chunks(chunk_size=8192):
+                    temp_file.write(chunk)
+                temp_file.flush()
+                temp_file.close()
+                
+                # Save to model from temp file
+                with open(temp_file.name, 'rb') as f:
+                    file_analysis.original_file.save(uploaded_file.name, f, save=True)
+                
+                # Extract metadata from temp file
+                with open(temp_file.name, 'rb') as f:
+                    metadata = MetadataExtractor.extract_metadata(f, uploaded_file.content_type)
+            else:
+                # For smaller files, process directly
+                uploaded_file.seek(0)
+                file_analysis.original_file.save(uploaded_file.name, uploaded_file, save=True)
+                
+                uploaded_file.seek(0)
+                metadata = MetadataExtractor.extract_metadata(uploaded_file, uploaded_file.content_type)
             
-            # Create entries
+            # Create metadata entries
             metadata_entries = []
             for key, value in metadata.items():
                 category = MetadataExtractor.categorize_metadata(key, value)
@@ -104,21 +154,37 @@ class AnalyzeFileView(APIView):
                 )
                 metadata_entries.append(entry)
             
-            # Calculate risk
+            # Calculate risk with improved algorithm
             metadata_data = [{'category': e.category} for e in metadata_entries]
             risk_score = RiskAnalyzer.calculate_risk_score(metadata_data)
             
-            # Remove metadata - UPDATED LINE
-            uploaded_file.seek(0)
-            cleaned = MetadataRemover.remove_metadata(
-                uploaded_file, 
-                uploaded_file.content_type,
-                uploaded_file.name  # Pass the original filename
-            )
+            # Remove metadata
+            if is_large_file and temp_file:
+                with open(temp_file.name, 'rb') as f:
+                    cleaned = MetadataRemover.remove_metadata(
+                        f, 
+                        uploaded_file.content_type,
+                        uploaded_file.name
+                    )
+            else:
+                uploaded_file.seek(0)
+                cleaned = MetadataRemover.remove_metadata(
+                    uploaded_file, 
+                    uploaded_file.content_type,
+                    uploaded_file.name
+                )
             
-            # Save cleaned
-            clean_name = f"{uploaded_file.name.rsplit('.', 1)[0]}_clean.{uploaded_file.name.rsplit('.', 1)[1]}"
-            file_analysis.cleaned_file.save(clean_name, cleaned)
+            # Save cleaned file
+            filename_parts = uploaded_file.name.rsplit('.', 1)
+            if len(filename_parts) == 2:
+                clean_name = f"{filename_parts[0]}_clean.{filename_parts[1]}"
+            else:
+                clean_name = f"{uploaded_file.name}_clean"
+            
+            if hasattr(cleaned, 'seek'):
+                cleaned.seek(0)
+            
+            file_analysis.cleaned_file.save(clean_name, cleaned, save=False)
             file_analysis.metadata_count = len(metadata_entries)
             file_analysis.risk_score = risk_score
             file_analysis.status = 'cleaned'
@@ -150,6 +216,15 @@ class AnalyzeFileView(APIView):
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
+        finally:
+            # Clean up temp file
+            if temp_file and os.path.exists(temp_file.name):
+                try:
+                    os.unlink(temp_file.name)
+                except Exception:
+                    pass
+
 
 class CleanFileView(APIView):
     
@@ -176,11 +251,25 @@ class CleanFileView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        return FileResponse(
-            file_analysis.cleaned_file.open('rb'),
-            as_attachment=True,
-            filename=f"clean_{file_analysis.original_filename}"
-        )
+        file_size = file_analysis.cleaned_file.size
+        
+        # Use streaming for large files
+        if file_size > 10 * 1024 * 1024:  # > 10MB
+            response = StreamingHttpResponse(
+                file_iterator(file_analysis.cleaned_file.open('rb')),
+                content_type=file_analysis.file_type
+            )
+            response['Content-Disposition'] = f'attachment; filename="clean_{file_analysis.original_filename}"'
+            response['Content-Length'] = file_size
+        else:
+            response = FileResponse(
+                file_analysis.cleaned_file.open('rb'),
+                as_attachment=True,
+                filename=f"clean_{file_analysis.original_filename}"
+            )
+            response['Content-Length'] = file_size
+        
+        return response
 
 
 class CleanAndDownloadView(APIView):
@@ -192,35 +281,89 @@ class CleanAndDownloadView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         uploaded_file = serializer.validated_data['file']
+        temp_file = None
         
         try:
-            # UPDATED LINE - Pass the original filename
-            cleaned_file = MetadataRemover.remove_metadata(
-                uploaded_file, 
-                uploaded_file.content_type,
-                uploaded_file.name  # Pass the original filename
-            )
+            is_large_file = uploaded_file.size > 10 * 1024 * 1024
             
+            # Process large files using temp storage
+            if is_large_file:
+                temp_file = tempfile.NamedTemporaryFile(
+                    delete=False,
+                    suffix=os.path.splitext(uploaded_file.name)[1]
+                )
+                
+                # Write to temp file in chunks
+                for chunk in uploaded_file.chunks(chunk_size=8192):
+                    temp_file.write(chunk)
+                temp_file.flush()
+                temp_file.close()
+                
+                # Process from temp file
+                with open(temp_file.name, 'rb') as f:
+                    cleaned_file = MetadataRemover.remove_metadata(
+                        f, 
+                        uploaded_file.content_type,
+                        uploaded_file.name
+                    )
+            else:
+                # Process smaller files directly
+                uploaded_file.seek(0)
+                cleaned_file = MetadataRemover.remove_metadata(
+                    uploaded_file, 
+                    uploaded_file.content_type,
+                    uploaded_file.name
+                )
+            
+            # Generate clean filename
             filename_parts = uploaded_file.name.rsplit('.', 1)
             if len(filename_parts) == 2:
                 clean_filename = f"{filename_parts[0]}_clean.{filename_parts[1]}"
             else:
                 clean_filename = f"{uploaded_file.name}_clean"
             
-            response = FileResponse(
-                cleaned_file,
-                as_attachment=True,
-                filename=clean_filename
-            )
-            response['Content-Type'] = uploaded_file.content_type
+            # Ensure file is at beginning
+            if hasattr(cleaned_file, 'seek'):
+                cleaned_file.seek(0)
+            
+            # Use streaming response for large files
+            if is_large_file and hasattr(cleaned_file, 'size'):
+                response = StreamingHttpResponse(
+                    file_iterator(cleaned_file),
+                    content_type=uploaded_file.content_type
+                )
+                response['Content-Disposition'] = f'attachment; filename="{clean_filename}"'
+                response['Content-Length'] = cleaned_file.size
+            else:
+                response = FileResponse(
+                    cleaned_file,
+                    as_attachment=True,
+                    filename=clean_filename
+                )
+                response['Content-Type'] = uploaded_file.content_type
+                
+                if hasattr(cleaned_file, 'size'):
+                    response['Content-Length'] = cleaned_file.size
             
             return response
             
         except Exception as e:
+            import traceback
+            print("Cleaning Error:", str(e))
+            print(traceback.format_exc())
+            
             return Response(
                 {'error': f'Cleaning failed: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
+        finally:
+            # Clean up temp file
+            if temp_file and os.path.exists(temp_file.name):
+                try:
+                    os.unlink(temp_file.name)
+                except Exception:
+                    pass
 
 
 class ShareFileView(APIView):
@@ -252,11 +395,25 @@ class ShareFileView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        return FileResponse(
-            file_analysis.cleaned_file.open('rb'),
-            as_attachment=True,
-            filename=f"clean_{file_analysis.original_filename}"
-        )
+        file_size = file_analysis.cleaned_file.size
+        
+        # Use streaming for large files
+        if file_size > 10 * 1024 * 1024:  # > 10MB
+            response = StreamingHttpResponse(
+                file_iterator(file_analysis.cleaned_file.open('rb')),
+                content_type=file_analysis.file_type
+            )
+            response['Content-Disposition'] = f'attachment; filename="clean_{file_analysis.original_filename}"'
+            response['Content-Length'] = file_size
+        else:
+            response = FileResponse(
+                file_analysis.cleaned_file.open('rb'),
+                as_attachment=True,
+                filename=f"clean_{file_analysis.original_filename}"
+            )
+            response['Content-Length'] = file_size
+        
+        return response
 
 
 class MakePublicView(APIView):
@@ -314,8 +471,6 @@ class HealthCheckView(APIView):
             'service': 'Automated Metadata Removal API',
             'version': '1.0.0'
         })
-    
-
 
 
 class EncryptFileView(APIView):
@@ -324,7 +479,8 @@ class EncryptFileView(APIView):
     def post(self, request):
         uploaded_file = request.FILES.get('file')
         password = request.data.get('password')
-        method = request.data.get('method', 'encrypt')  # 'encrypt', 'pdf', or 'zip'
+        method = request.data.get('method', 'encrypt')
+        temp_file = None
         
         if not uploaded_file:
             return Response(
@@ -339,13 +495,35 @@ class EncryptFileView(APIView):
             )
         
         try:
-            # Encrypt the file
-            encrypted_file = EncryptionHandler.protect_file(
-                uploaded_file,
-                uploaded_file.name,
-                password,
-                method
-            )
+            is_large_file = uploaded_file.size > 10 * 1024 * 1024
+            
+            # Handle large files with temp storage
+            if is_large_file:
+                temp_file = tempfile.NamedTemporaryFile(
+                    delete=False,
+                    suffix=os.path.splitext(uploaded_file.name)[1]
+                )
+                
+                for chunk in uploaded_file.chunks(chunk_size=8192):
+                    temp_file.write(chunk)
+                temp_file.flush()
+                temp_file.close()
+                
+                with open(temp_file.name, 'rb') as f:
+                    encrypted_file = EncryptionHandler.protect_file(
+                        f,
+                        uploaded_file.name,
+                        password,
+                        method
+                    )
+            else:
+                uploaded_file.seek(0)
+                encrypted_file = EncryptionHandler.protect_file(
+                    uploaded_file,
+                    uploaded_file.name,
+                    password,
+                    method
+                )
             
             # Generate encrypted filename
             name_parts = uploaded_file.name.rsplit('.', 1)
@@ -356,11 +534,26 @@ class EncryptFileView(APIView):
             else:
                 encrypted_filename = f"{name_parts[0]}_protected.{name_parts[1] if len(name_parts) > 1 else 'pdf'}"
             
-            response = FileResponse(
-                encrypted_file,
-                as_attachment=True,
-                filename=encrypted_filename
-            )
+            if hasattr(encrypted_file, 'seek'):
+                encrypted_file.seek(0)
+            
+            # Use streaming for large encrypted files
+            if is_large_file and hasattr(encrypted_file, 'size') and encrypted_file.size > 10 * 1024 * 1024:
+                response = StreamingHttpResponse(
+                    file_iterator(encrypted_file),
+                    content_type='application/octet-stream'
+                )
+                response['Content-Disposition'] = f'attachment; filename="{encrypted_filename}"'
+                response['Content-Length'] = encrypted_file.size
+            else:
+                response = FileResponse(
+                    encrypted_file,
+                    as_attachment=True,
+                    filename=encrypted_filename
+                )
+                
+                if hasattr(encrypted_file, 'size'):
+                    response['Content-Length'] = encrypted_file.size
             
             return response
         
@@ -373,6 +566,13 @@ class EncryptFileView(APIView):
                 {'error': f'Encryption failed: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
+        finally:
+            if temp_file and os.path.exists(temp_file.name):
+                try:
+                    os.unlink(temp_file.name)
+                except Exception:
+                    pass
 
 
 class DecryptFileView(APIView):
@@ -381,7 +581,8 @@ class DecryptFileView(APIView):
     def post(self, request):
         uploaded_file = request.FILES.get('file')
         password = request.data.get('password')
-        original_filename = request.data.get('original_filename', '')  # Optional: user can provide original name
+        original_filename = request.data.get('original_filename', '')
+        temp_file = None
         
         if not uploaded_file:
             return Response(
@@ -396,18 +597,32 @@ class DecryptFileView(APIView):
             )
         
         try:
-            # Decrypt the file
-            decrypted_file = EncryptionHandler.decrypt_file(uploaded_file, password)
+            is_large_file = uploaded_file.size > 10 * 1024 * 1024
             
-            # Try to determine original filename
+            # Handle large files with temp storage
+            if is_large_file:
+                temp_file = tempfile.NamedTemporaryFile(
+                    delete=False,
+                    suffix=os.path.splitext(uploaded_file.name)[1]
+                )
+                
+                for chunk in uploaded_file.chunks(chunk_size=8192):
+                    temp_file.write(chunk)
+                temp_file.flush()
+                temp_file.close()
+                
+                with open(temp_file.name, 'rb') as f:
+                    decrypted_file = EncryptionHandler.decrypt_file(f, password)
+            else:
+                uploaded_file.seek(0)
+                decrypted_file = EncryptionHandler.decrypt_file(uploaded_file, password)
+            
+            # Determine filename
             if original_filename:
-                # User provided the original filename
                 filename = original_filename
             else:
-                # Try to extract from uploaded filename
                 uploaded_name = uploaded_file.name
                 
-                # Remove common encryption suffixes
                 if uploaded_name.endswith('_encrypted.enc'):
                     filename = uploaded_name.replace('_encrypted.enc', '')
                 elif uploaded_name.endswith('.enc'):
@@ -417,14 +632,28 @@ class DecryptFileView(APIView):
                 elif uploaded_name.endswith('_protected.pdf'):
                     filename = uploaded_name.replace('_protected.pdf', '.pdf')
                 else:
-                    # Default: remove _protected or add _decrypted
                     filename = uploaded_name.replace('_protected', '_decrypted')
             
-            response = FileResponse(
-                decrypted_file,
-                as_attachment=True,
-                filename=filename
-            )
+            if hasattr(decrypted_file, 'seek'):
+                decrypted_file.seek(0)
+            
+            # Use streaming for large decrypted files
+            if is_large_file and hasattr(decrypted_file, 'size') and decrypted_file.size > 10 * 1024 * 1024:
+                response = StreamingHttpResponse(
+                    file_iterator(decrypted_file),
+                    content_type='application/octet-stream'
+                )
+                response['Content-Disposition'] = f'attachment; filename="{filename}"'
+                response['Content-Length'] = decrypted_file.size
+            else:
+                response = FileResponse(
+                    decrypted_file,
+                    as_attachment=True,
+                    filename=filename
+                )
+                
+                if hasattr(decrypted_file, 'size'):
+                    response['Content-Length'] = decrypted_file.size
             
             return response
         
@@ -437,6 +666,13 @@ class DecryptFileView(APIView):
                 {'error': 'Decryption failed: Wrong password or corrupted file'},
                 status=status.HTTP_401_UNAUTHORIZED
             )
+        
+        finally:
+            if temp_file and os.path.exists(temp_file.name):
+                try:
+                    os.unlink(temp_file.name)
+                except Exception:
+                    pass
 
 
 class ValidatePasswordView(APIView):

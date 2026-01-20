@@ -1,5 +1,7 @@
 from pathlib import Path
 from decouple import config
+import os
+import tempfile
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -117,10 +119,6 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
-MAX_UPLOAD_SIZE = 52428800
-
-FILE_UPLOAD_MAX_MEMORY_SIZE = 52428800
-
 SUPPORTED_FILE_FORMATS = [
     'image/jpeg',
     'image/png',
@@ -129,3 +127,16 @@ SUPPORTED_FILE_FORMATS = [
     'image/tiff',
     'application/pdf',
 ]
+
+# File Upload Settings
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB - files larger than this use temp files
+DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB - maximum POST size
+
+# Cross-platform temporary directory configuration
+# This ensures the temp directory exists and uses the system's temp directory
+TEMP_DIR = BASE_DIR / 'temp'
+TEMP_DIR.mkdir(exist_ok=True)  # Create if doesn't exist
+FILE_UPLOAD_TEMP_DIR = str(TEMP_DIR)  # Use project temp directory
+
+# Alternative: Use system temp directory (recommended)
+# FILE_UPLOAD_TEMP_DIR = tempfile.gettempdir()

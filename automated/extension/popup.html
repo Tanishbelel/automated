@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metadata Removal Tool</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">🛡️</div>
+            <h1>Metadata Remover</h1>
+            <p class="tagline">Protect your privacy</p>
+        </div>
+
+        <!-- Connection Status -->
+        <div id="connectionStatus" class="connection-status">
+            <span class="status-dot"></span>
+            <span class="status-text">Checking server...</span>
+        </div>
+
+        <!-- Upload Section -->
+        <div id="uploadSection" class="section">
+            <div id="errorMessage" class="error-message hidden"></div>
+
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📁</div>
+                <p class="upload-text"><strong>Click to upload</strong></p>
+                <p class="upload-hint">or drag & drop</p>
+                <p class="upload-formats">JPEG, PNG, GIF, WebP, PDF</p>
+            </div>
+
+            <input type="file" id="fileInput"
+                accept="image/jpeg,image/png,image/gif,image/webp,image/tiff,application/pdf,.pdf" hidden>
+
+            <div id="selectedFile" class="selected-file hidden">
+                <div class="file-icon">✅</div>
+                <div class="file-info">
+                    <p class="file-name" id="fileName"></p>
+                    <p class="file-size" id="fileSize"></p>
+                </div>
+                <button class="remove-file" id="removeFile">✕</button>
+            </div>
+
+            <div class="platform-select">
+                <label for="platform">Optimize for:</label>
+                <select id="platform">
+                    <option value="general">General (All Metadata)</option>
+                    <option value="instagram">Instagram</option>
+                    <option value="facebook">Facebook</option>
+                    <option value="twitter">Twitter</option>
+                    <option value="linkedin">LinkedIn</option>
+                </select>
+            </div>
+
+            <button id="analyzeBtn" class="btn-primary" disabled>
+                <span class="btn-icon">🔍</span>
+                <span>Analyze File</span>
+            </button>
+        </div>
+
+        <!-- Loading Section -->
+        <div id="loadingSection" class="section hidden">
+            <div class="loading-spinner"></div>
+            <p class="loading-text">Analyzing metadata...</p>
+            <p class="loading-subtext">Calculating privacy risk</p>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsSection" class="section hidden">
+            <div class="results-header">
+                <h2>Analysis Complete</h2>
+                <button id="newAnalysis" class="btn-ghost">+ New</button>
+            </div>
+
+            <!-- Risk Score -->
+            <div class="risk-card" id="riskCard">
+                <div class="risk-score-container">
+                    <div class="risk-score" id="riskScore">0</div>
+                    <div class="risk-label" id="riskLabel">Risk Score</div>
+                </div>
+                <div class="risk-meter">
+                    <div class="risk-meter-fill" id="riskMeterFill"></div>
+                </div>
+                <p class="risk-recommendation" id="riskRecommendation"></p>
+            </div>
+
+            <!-- Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="metadataCount">0</div>
+                    <div class="stat-label">Metadata Found</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="highRiskCount">0</div>
+                    <div class="stat-label">High Risk</div>
+                </div>
+            </div>
+
+            <!-- Metadata List -->
+            <div class="metadata-section">
+                <div class="metadata-header">
+                    <h3>Detected Metadata</h3>
+                    <button id="toggleMetadata" class="btn-ghost">Show All</button>
+                </div>
+                <div class="metadata-list" id="metadataList"></div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button id="downloadClean" class="btn-primary">
+                    <span class="btn-icon">⬇️</span>
+                    <span>Download Clean File</span>
+                </button>
+                <button id="shareBtn" class="btn-secondary">
+                    <span class="btn-icon">🔗</span>
+                    <span>Share</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Share Modal -->
+        <div id="shareModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Share Clean File</h3>
+                    <button id="closeModal" class="modal-close">✕</button>
+                </div>
+                <div class="share-link-container">
+                    <input type="text" id="shareLink" readonly>
+                    <button id="copyLink" class="btn-copy">📋</button>
+                </div>
+                <p class="share-hint">Anyone with this link can download the clean file</p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>Made with ❤️ for your privacy</p>
+            <a href="encrypt.html" class="footer-link">🔐 Encrypt Files</a>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>
