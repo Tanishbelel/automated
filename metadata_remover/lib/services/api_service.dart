@@ -1,13 +1,16 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
-import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 import '../models/file_analysis.dart';
 import '../models/password_validation.dart';
+import '../models/user.dart';
+import '../models/auth_response.dart';
 
 class ApiService {
   final Dio _dio;
+  String? _authToken;
 
   ApiService()
       : _dio = Dio(
@@ -19,7 +22,175 @@ class ApiService {
         'Accept': 'application/json',
       },
     ),
-  );
+  ) {
+    // Add interceptor to include auth token in requests
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) async {
+          if (_authToken == null) {
+            await loadToken();
+          }
+          if (_authToken != null) {
+            options.headers['Authorization'] = 'Token $_authToken';
+          }
+          return handler.next(options);
+        },
+      ),
+    );
+  }
+
+  // ==================== TOKEN MANAGEMENT ====================
+
+  Future<void> loadToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    _authToken = prefs.getString('auth_token');
+  }
+
+  Future<void> saveToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('auth_token', token);
+    _authToken = token;
+  }
+
+  Future<void> clearToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token');
+    _authToken = null;
+  }
+
+  Future<bool> isAuthenticated() async {
+    await loadToken();
+    return _authToken != null;
+  }
+
+  // ==================== AUTHENTICATION ====================
+
+  Future<AuthResponse> register({
+    required String username,
+    required String email,
+    required String password,
+    required String password2,
+    String? firstName,
+    String? lastName,
+  }) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.register,
+        data: {
+          'username': username,
+          'email': email,
+          'password': password,
+          'password2': password2,
+          if (firstName != null && firstName.isNotEmpty) 'first_name': firstName,
+          if (lastName != null && lastName.isNotEmpty) 'last_name': lastName,
+        },
+      );
+
+      final authResponse = AuthResponse.fromJson(response.data);
+      await saveToken(authResponse.token);
+      return authResponse;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<AuthResponse> login({
+    required String username,
+    required String password,
+  }) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.login,
+        data: {
+          'username': username,
+          'password': password,
+        },
+      );
+
+      final authResponse = AuthResponse.fromJson(response.data);
+      await saveToken(authResponse.token);
+      return authResponse;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<void> logout() async {
+    try {
+      await _dio.post(ApiConfig.logout);
+    } catch (e) {
+      // Ignore errors on logout
+    } finally {
+      await clearToken();
+    }
+  }
+
+  Future<User> getProfile() async {
+    try {
+      final response = await _dio.get(ApiConfig.profile);
+      return User.fromJson(response.data);
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<User> updateProfile({
+    String? firstName,
+    String? lastName,
+    String? email,
+  }) async {
+    try {
+      final response = await _dio.patch(
+        ApiConfig.profileUpdate,
+        data: {
+          if (firstName != null) 'first_name': firstName,
+          if (lastName != null) 'last_name': lastName,
+          if (email != null) 'email': email,
+        },
+      );
+
+      return User.fromJson(response.data['user']);
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<String> changePassword({
+    required String oldPassword,
+    required String newPassword,
+    required String newPassword2,
+  }) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.changePassword,
+        data: {
+          'old_password': oldPassword,
+          'new_password': newPassword,
+          'new_password2': newPassword2,
+        },
+      );
+
+      final newToken = response.data['token'];
+      await saveToken(newToken);
+      return response.data['message'];
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<void> deleteAccount(String password) async {
+    try {
+      await _dio.delete(
+        ApiConfig.deleteAccount,
+        data: {'password': password},
+      );
+      await clearToken();
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  // ==================== FILE OPERATIONS ====================
 
   // Analyze file and get metadata (supports both mobile and web)
   Future<FileAnalysis> analyzeFile(
@@ -237,7 +408,8 @@ class ApiService {
     }
   }
 
-  // Error handling
+  // ==================== ERROR HANDLING ====================
+
   String _handleError(DioException e) {
     print('DioException Type: ${e.type}');
     print('DioException Message: ${e.message}');
@@ -247,6 +419,9 @@ class ApiService {
       final data = e.response?.data;
       if (data is Map && data.containsKey('error')) {
         return data['error'];
+      }
+      if (data is Map && data.containsKey('detail')) {
+        return data['detail'];
       }
       if (data is Map && data.containsKey('file')) {
         return data['file'].toString();

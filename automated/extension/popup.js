@@ -5,9 +5,29 @@ const API_BASE_URL = 'http://127.0.0.1:8000/api';
 let selectedFile = null;
 let analysisData = null;
 let showAllMetadata = false;
+let authToken = null;
+let currentUser = null;
 
 // ===== DOM Elements =====
 const elements = {
+    // Auth Elements
+    authStatus: document.getElementById('authStatus'),
+    loggedOutStatus: document.getElementById('loggedOutStatus'),
+    loggedInStatus: document.getElementById('loggedInStatus'),
+    userAvatar: document.getElementById('userAvatar'),
+    userName: document.getElementById('userName'),
+    showLoginBtn: document.getElementById('showLoginBtn'),
+    logoutBtn: document.getElementById('logoutBtn'),
+    authSection: document.getElementById('authSection'),
+    loginTabBtn: document.getElementById('loginTabBtn'),
+    signupTabBtn: document.getElementById('signupTabBtn'),
+    loginForm: document.getElementById('loginForm'),
+    signupForm: document.getElementById('signupForm'),
+    authMessage: document.getElementById('authMessage'),
+    loginSubmitBtn: document.getElementById('loginSubmitBtn'),
+    signupSubmitBtn: document.getElementById('signupSubmitBtn'),
+    cancelAuthBtn: document.getElementById('cancelAuthBtn'),
+    
     // Connection
     connectionStatus: document.getElementById('connectionStatus'),
 
@@ -50,9 +70,158 @@ const elements = {
 
 // ===== Initialization =====
 document.addEventListener('DOMContentLoaded', () => {
+    loadAuthState();
     checkServerConnection();
     setupEventListeners();
 });
+
+// ===== Authentication Functions =====
+function loadAuthState() {
+    chrome.storage.local.get(['authToken', 'currentUser'], (result) => {
+        if (result.authToken && result.currentUser) {
+            authToken = result.authToken;
+            currentUser = result.currentUser;
+            updateAuthUI(true);
+        } else {
+            updateAuthUI(false);
+        }
+    });
+}
+
+function updateAuthUI(isLoggedIn) {
+    if (isLoggedIn && currentUser) {
+        elements.loggedOutStatus.classList.add('hidden');
+        elements.loggedInStatus.classList.remove('hidden');
+        
+        const initial = (currentUser.first_name?.[0] || currentUser.username[0]).toUpperCase();
+        elements.userAvatar.textContent = initial;
+        elements.userName.textContent = currentUser.username;
+    } else {
+        elements.loggedOutStatus.classList.remove('hidden');
+        elements.loggedInStatus.classList.add('hidden');
+    }
+}
+
+async function login(username, password) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/login/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.non_field_errors?.[0] || data.detail || 'Login failed');
+        }
+
+        // Save to chrome storage
+        authToken = data.token;
+        currentUser = data.user;
+        
+        chrome.storage.local.set({
+            authToken: data.token,
+            currentUser: data.user
+        }, () => {
+            updateAuthUI(true);
+            hideAuthSection();
+            showAuthMessage('Login successful!', 'success');
+        });
+
+        return true;
+    } catch (error) {
+        showAuthMessage(error.message, 'error');
+        return false;
+    }
+}
+
+async function signup(username, email, password, password2) {
+    if (password !== password2) {
+        showAuthMessage('Passwords do not match!', 'error');
+        return false;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/register/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, email, password, password2 })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            const errors = [];
+            for (const [key, value] of Object.entries(data)) {
+                if (Array.isArray(value)) {
+                    errors.push(...value);
+                } else {
+                    errors.push(value);
+                }
+            }
+            throw new Error(errors.join(', '));
+        }
+
+        // Save to chrome storage
+        authToken = data.token;
+        currentUser = data.user;
+        
+        chrome.storage.local.set({
+            authToken: data.token,
+            currentUser: data.user
+        }, () => {
+            updateAuthUI(true);
+            hideAuthSection();
+            showAuthMessage('Account created successfully!', 'success');
+        });
+
+        return true;
+    } catch (error) {
+        showAuthMessage(error.message, 'error');
+        return false;
+    }
+}
+
+async function logout() {
+    if (authToken) {
+        try {
+            await fetch(`${API_BASE_URL}/auth/logout/`, {
+                method: 'POST',
+                headers: { 'Authorization': `Token ${authToken}` }
+            });
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
+    }
+
+    chrome.storage.local.remove(['authToken', 'currentUser'], () => {
+        authToken = null;
+        currentUser = null;
+        updateAuthUI(false);
+        showAuthMessage('Logged out successfully', 'success');
+    });
+}
+
+function showAuthSection() {
+    elements.uploadSection.classList.add('hidden');
+    elements.authSection.classList.remove('hidden');
+}
+
+function hideAuthSection() {
+    elements.authSection.classList.add('hidden');
+    elements.uploadSection.classList.remove('hidden');
+}
+
+function showAuthMessage(message, type) {
+    elements.authMessage.className = type === 'error' ? 'error-message' : 'success-message';
+    elements.authMessage.textContent = type === 'error' ? `❌ ${message}` : `✅ ${message}`;
+    elements.authMessage.classList.remove('hidden');
+    
+    setTimeout(() => {
+        elements.authMessage.classList.add('hidden');
+    }, 5000);
+}
 
 // ===== Server Connection =====
 async function checkServerConnection() {
@@ -75,6 +244,68 @@ async function checkServerConnection() {
 
 // ===== Event Listeners =====
 function setupEventListeners() {
+    // Auth buttons
+    elements.showLoginBtn.addEventListener('click', showAuthSection);
+    elements.logoutBtn.addEventListener('click', logout);
+    elements.cancelAuthBtn.addEventListener('click', hideAuthSection);
+
+    // Auth tabs
+    elements.loginTabBtn.addEventListener('click', () => {
+        elements.loginTabBtn.classList.add('active');
+        elements.signupTabBtn.classList.remove('active');
+        elements.loginForm.classList.remove('hidden');
+        elements.signupForm.classList.add('hidden');
+        elements.authMessage.classList.add('hidden');
+    });
+
+    elements.signupTabBtn.addEventListener('click', () => {
+        elements.signupTabBtn.classList.add('active');
+        elements.loginTabBtn.classList.remove('active');
+        elements.signupForm.classList.remove('hidden');
+        elements.loginForm.classList.add('hidden');
+        elements.authMessage.classList.add('hidden');
+    });
+
+    // Login submit
+    elements.loginSubmitBtn.addEventListener('click', async () => {
+        const username = document.getElementById('loginUsername').value;
+        const password = document.getElementById('loginPassword').value;
+        
+        if (!username || !password) {
+            showAuthMessage('Please fill in all fields', 'error');
+            return;
+        }
+
+        elements.loginSubmitBtn.disabled = true;
+        elements.loginSubmitBtn.innerHTML = '<span>Logging in...</span>';
+        
+        await login(username, password);
+        
+        elements.loginSubmitBtn.disabled = false;
+        elements.loginSubmitBtn.innerHTML = '<span>🔓 Login</span>';
+    });
+
+    // Signup submit
+    elements.signupSubmitBtn.addEventListener('click', async () => {
+        const username = document.getElementById('signupUsername').value;
+        const email = document.getElementById('signupEmail').value;
+        const password = document.getElementById('signupPassword').value;
+        const password2 = document.getElementById('signupPassword2').value;
+        
+        if (!username || !email || !password || !password2) {
+            showAuthMessage('Please fill in all fields', 'error');
+            return;
+        }
+
+        elements.signupSubmitBtn.disabled = true;
+        elements.signupSubmitBtn.innerHTML = '<span>Creating account...</span>';
+        
+        await signup(username, email, password, password2);
+        
+        elements.signupSubmitBtn.disabled = false;
+        elements.signupSubmitBtn.innerHTML = '<span>✨ Create Account</span>';
+    });
+
     // Upload area click
     elements.uploadArea.addEventListener('click', () => {
         elements.fileInput.click();
@@ -192,8 +423,14 @@ async function analyzeFile() {
         formData.append('file', selectedFile);
         formData.append('platform', elements.platform.value);
 
+        const headers = {};
+        if (authToken) {
+            headers['Authorization'] = `Token ${authToken}`;
+        }
+
         const response = await fetch(`${API_BASE_URL}/analyze/`, {
             method: 'POST',
+            headers: headers,
             body: formData
         });
 
@@ -218,11 +455,14 @@ async function downloadCleanFile() {
     if (!analysisData) return;
 
     try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (authToken) {
+            headers['Authorization'] = `Token ${authToken}`;
+        }
+
         const response = await fetch(`${API_BASE_URL}/clean/`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: headers,
             body: JSON.stringify({ analysis_id: analysisData.analysis_id })
         });
 
@@ -249,10 +489,15 @@ async function downloadCleanFile() {
 async function showShareModal() {
     if (!analysisData) return;
 
+    if (!authToken) {
+        showError('Please login to share files');
+        return;
+    }
+
     try {
-        // Make the file public first
         const response = await fetch(`${API_BASE_URL}/make-public/${analysisData.analysis_id}/`, {
-            method: 'POST'
+            method: 'POST',
+            headers: { 'Authorization': `Token ${authToken}` }
         });
 
         const data = await response.json();
@@ -319,11 +564,11 @@ function renderMetadataList() {
 
     if (entries.length === 0) {
         elements.metadataList.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-state-icon">🎉</div>
-        <p>No metadata detected!</p>
-      </div>
-    `;
+            <div class="empty-state">
+                <div class="empty-state-icon">🎉</div>
+                <p>No metadata detected!</p>
+            </div>
+        `;
         elements.toggleMetadata.classList.add('hidden');
         return;
     }
@@ -339,15 +584,15 @@ function renderMetadataList() {
     const displayEntries = showAllMetadata ? sortedEntries : sortedEntries.slice(0, 5);
 
     elements.metadataList.innerHTML = displayEntries.map(entry => `
-    <div class="metadata-item">
-      <span class="metadata-risk-badge ${entry.risk_level || 'low'}">${entry.risk_level || 'low'}</span>
-      <div class="metadata-content">
-        <div class="metadata-key">${escapeHtml(entry.key)}</div>
-        <div class="metadata-value">${escapeHtml(truncate(entry.value, 100))}</div>
-        <div class="metadata-category">${entry.category || 'other'}</div>
-      </div>
-    </div>
-  `).join('');
+        <div class="metadata-item">
+            <span class="metadata-risk-badge ${entry.risk_level || 'low'}">${entry.risk_level || 'low'}</span>
+            <div class="metadata-content">
+                <div class="metadata-key">${escapeHtml(entry.key)}</div>
+                <div class="metadata-value">${escapeHtml(truncate(entry.value, 100))}</div>
+                <div class="metadata-category">${entry.category || 'other'}</div>
+            </div>
+        </div>
+    `).join('');
 
     if (!showAllMetadata && entries.length > 5) {
         elements.toggleMetadata.textContent = `Show All (${entries.length})`;

@@ -6,14 +6,20 @@ plugins {
 
 android {
     namespace = "com.example.metadata_remover"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.metadata_remover"
-        minSdk = 21
-        targetSdk = 35
+        minSdk = flutter.minSdkVersion
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+    }
+
+    // 🔧 FIX: Align Java with Kotlin (JVM 17)
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     buildTypes {
@@ -31,6 +37,11 @@ android {
             isShrinkResources = false
         }
     }
+}
+
+// 🔧 FIX: Force Kotlin JVM target
+kotlin {
+    jvmToolchain(17)
 }
 
 flutter {

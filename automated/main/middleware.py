@@ -40,3 +40,4 @@ class CORSExtensionMiddleware(MiddlewareMixin):
             response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
         
         return response
+    

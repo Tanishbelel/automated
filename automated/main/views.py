@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -9,6 +9,10 @@ from .serializers import (
     FileAnalysisSerializer, MetadataEntrySerializer,
     FileUploadSerializer, PlatformRuleSerializer
 )
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.authtoken.models import Token
+from django.contrib.auth import login, logout
+from django.contrib.auth.models import User
 from .utils.metadata_extractor import MetadataExtractor
 from .utils.metadata_remover import MetadataRemover
 from .utils.risk_analyzer import RiskAnalyzer
@@ -17,8 +21,189 @@ import io
 import os
 import tempfile
 from .utils.encryption_handler import EncryptionHandler, PasswordStrengthValidator
+from .serializers import (
+    RegisterSerializer, LoginSerializer, UserSerializer,
+    ChangePasswordSerializer, UpdateProfileSerializer
+)
+class RegisterView(generics.CreateAPIView):
+    """
+    User registration endpoint
+    POST /api/auth/register/
+    Body: {username, email, password, password2, first_name (optional), last_name (optional)}
+    """
+    queryset = User.objects.all()
+    permission_classes = (AllowAny,)
+    serializer_class = RegisterSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        
+        # Create token for the user
+        token, created = Token.objects.get_or_create(user=user)
+        
+        return Response({
+            'user': UserSerializer(user).data,
+            'token': token.key,
+            'message': 'User registered successfully'
+        }, status=status.HTTP_201_CREATED)
 
 
+class LoginView(APIView):
+    """
+    User login endpoint
+    POST /api/auth/login/
+    Body: {username, password}
+    """
+    permission_classes = (AllowAny,)
+    serializer_class = LoginSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        user = serializer.validated_data['user']
+        
+        # Create or get token
+        token, created = Token.objects.get_or_create(user=user)
+        
+        # Login user (creates session)
+        login(request, user)
+        
+        return Response({
+            'user': UserSerializer(user).data,
+            'token': token.key,
+            'message': 'Login successful'
+        }, status=status.HTTP_200_OK)
+
+
+class LogoutView(APIView):
+    """
+    User logout endpoint
+    POST /api/auth/logout/
+    Headers: Authorization: Token <token>
+    """
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request):
+        try:
+            # Delete the user's token
+            request.user.auth_token.delete()
+        except Exception:
+            pass
+        
+        # Logout user (destroys session)
+        logout(request)
+        
+        return Response({
+            'message': 'Logout successful'
+        }, status=status.HTTP_200_OK)
+
+
+class UserProfileView(APIView):
+    """
+    Get current user profile
+    GET /api/auth/profile/
+    Headers: Authorization: Token <token>
+    """
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request):
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
+
+
+class UpdateProfileView(generics.UpdateAPIView):
+    """
+    Update user profile
+    PUT/PATCH /api/auth/profile/update/
+    Headers: Authorization: Token <token>
+    Body: {first_name, last_name, email}
+    """
+    permission_classes = (IsAuthenticated,)
+    serializer_class = UpdateProfileSerializer
+
+    def get_object(self):
+        return self.request.user
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        return Response({
+            'user': serializer.data,
+            'message': 'Profile updated successfully'
+        })
+
+
+class ChangePasswordView(APIView):
+    """
+    Change user password
+    POST /api/auth/change-password/
+    Headers: Authorization: Token <token>
+    Body: {old_password, new_password, new_password2}
+    """
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request):
+        serializer = ChangePasswordSerializer(
+            data=request.data,
+            context={'request': request}
+        )
+        
+        if serializer.is_valid():
+            # Set new password
+            request.user.set_password(serializer.validated_data['new_password'])
+            request.user.save()
+            
+            # Update token
+            Token.objects.filter(user=request.user).delete()
+            token = Token.objects.create(user=request.user)
+            
+            return Response({
+                'message': 'Password changed successfully',
+                'token': token.key
+            }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class DeleteAccountView(APIView):
+    """
+    Delete user account
+    DELETE /api/auth/delete-account/
+    Headers: Authorization: Token <token>
+    Body: {password}
+    """
+    permission_classes = (IsAuthenticated,)
+
+    def delete(self, request):
+        password = request.data.get('password')
+        
+        if not password:
+            return Response(
+                {'error': 'Password is required to delete account'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not request.user.check_password(password):
+            return Response(
+                {'error': 'Incorrect password'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Delete user account
+        user = request.user
+        user.delete()
+        
+        return Response({
+            'message': 'Account deleted successfully'
+        }, status=status.HTTP_200_OK)
+    
 def file_iterator(file_object, chunk_size=8192):
     """Generator to read file in chunks to avoid memory issues."""
     while True:

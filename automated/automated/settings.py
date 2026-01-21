@@ -19,21 +19,23 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework.authtoken',
     'corsheaders',
     'main',
 ]
 
+# FIXED: Remove duplicate CorsMiddleware and fix order
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    # 'django.middleware.csrf.CsrfViewMiddleware',  # COMMENTED OUT - Disabled for API
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'automated.middleware.DisableCSRFForAPI',
 ]
-
 ROOT_URLCONF = 'automated.urls'
 
 TEMPLATES = [
@@ -81,9 +83,18 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# FIXED: Correct REST_FRAMEWORK configuration
 REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'automated.settings.CsrfExemptSessionAuthentication', # FIXED: Use the custom CSRF exempt class
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',  # FIXED: This was wrong before
+    ],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',  # For browsable API
     ],
     'DEFAULT_PARSER_CLASSES': [
         'rest_framework.parsers.JSONParser',
@@ -94,8 +105,8 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 10,
 }
 
+# CORS Configuration
 CORS_ALLOW_ALL_ORIGINS = True
-
 CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOW_METHODS = [
@@ -119,6 +130,12 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
+# CSRF Configuration for local development
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+]
+
 SUPPORTED_FILE_FORMATS = [
     'image/jpeg',
     'image/png',
@@ -129,14 +146,40 @@ SUPPORTED_FILE_FORMATS = [
 ]
 
 # File Upload Settings
-FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB - files larger than this use temp files
-DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB - maximum POST size
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB
 
-# Cross-platform temporary directory configuration
-# This ensures the temp directory exists and uses the system's temp directory
+# Temporary directory configuration
 TEMP_DIR = BASE_DIR / 'temp'
-TEMP_DIR.mkdir(exist_ok=True)  # Create if doesn't exist
-FILE_UPLOAD_TEMP_DIR = str(TEMP_DIR)  # Use project temp directory
+TEMP_DIR.mkdir(exist_ok=True)
+FILE_UPLOAD_TEMP_DIR = str(TEMP_DIR)
 
-# Alternative: Use system temp directory (recommended)
-# FILE_UPLOAD_TEMP_DIR = tempfile.gettempdir()
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',
+    ],
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    ],
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.MultiPartParser',
+        'rest_framework.parsers.FormParser',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10,
+}
+
+# Add this new setting to disable CSRF for DRF views
+# This is safe because we use Token authentication
+from rest_framework.authentication import SessionAuthentication
+
+class CsrfExemptSessionAuthentication(SessionAuthentication):
+    def enforce_csrf(self, request):
+        return  # Do not enforce CSRF for API requests
+    

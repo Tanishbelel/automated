@@ -5,6 +5,15 @@ class ApiConfig {
   // static const String baseUrl = 'https://your-domain.com/api'; // For production
 
   // Endpoints
+  static const String register = '/auth/register/';
+  static const String login = '/auth/login/';
+  static const String logout = '/auth/logout/';
+  static const String profile = '/auth/profile/';
+  static const String profileUpdate = '/auth/profile/update/';
+  static const String changePassword = '/auth/change-password/';
+  static const String deleteAccount = '/auth/delete-account/';
+
+
   static const String analyze = '/analyze/';
   static const String clean = '/clean/';
   static const String cleanDownload = '/clean-download/';

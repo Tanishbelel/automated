@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Metadata Removal Tool</title>
     <link rel="stylesheet" href="popup.css">
+<link rel="stylesheet" href="auth-styles.css">
 </head>
 
 <body>
@@ -15,6 +16,53 @@
             <div class="logo">🛡️</div>
             <h1>Metadata Remover</h1>
             <p class="tagline">Protect your privacy</p>
+        </div>
+
+        <!-- Auth Status Bar -->
+        <div id="authStatus" class="auth-status">
+            <div id="loggedOutStatus" class="hidden">
+                <span class="status-text">Not logged in</span>
+                <button class="btn-auth-small" id="showLoginBtn">Login</button>
+            </div>
+            <div id="loggedInStatus" class="hidden">
+                <div class="user-badge">
+                    <div class="user-avatar" id="userAvatar">U</div>
+                    <span class="user-name" id="userName">User</span>
+                </div>
+                <button class="btn-icon-small" id="logoutBtn" title="Logout">🚪</button>
+            </div>
+        </div>
+
+        <!-- Login/Signup Section -->
+        <div id="authSection" class="section hidden">
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="loginTabBtn">Login</button>
+                <button class="auth-tab" id="signupTabBtn">Sign Up</button>
+            </div>
+
+            <div id="authMessage" class="hidden"></div>
+
+            <!-- Login Form -->
+            <div id="loginForm" class="auth-form">
+                <input type="text" id="loginUsername" placeholder="Username" class="input-field">
+                <input type="password" id="loginPassword" placeholder="Password" class="input-field">
+                <button class="btn-primary" id="loginSubmitBtn">
+                    <span>🔓 Login</span>
+                </button>
+            </div>
+
+            <!-- Signup Form -->
+            <div id="signupForm" class="auth-form hidden">
+                <input type="text" id="signupUsername" placeholder="Username" class="input-field">
+                <input type="email" id="signupEmail" placeholder="Email" class="input-field">
+                <input type="password" id="signupPassword" placeholder="Password" class="input-field">
+                <input type="password" id="signupPassword2" placeholder="Confirm Password" class="input-field">
+                <button class="btn-primary" id="signupSubmitBtn">
+                    <span>✨ Create Account</span>
+                </button>
+            </div>
+
+            <button class="btn-ghost" id="cancelAuthBtn">← Back</button>
         </div>
 
         <!-- Connection Status -->
@@ -141,7 +189,6 @@
         <!-- Footer -->
         <div class="footer">
             <p>Made with ❤️ for your privacy</p>
-            <a href="encrypt.html" class="footer-link">🔐 Encrypt Files</a>
         </div>
     </div>
 
