@@ -363,7 +363,12 @@ loginForm.onsubmit = async (e) => {
         const data = await response.json();
         
         if (!response.ok) {
-            throw new Error(data.non_field_errors?.[0] || data.detail || "Login failed");
+            // Handle login errors
+            const errorMsg = data.non_field_errors?.[0] 
+                || data.detail 
+                || data.error
+                || "Invalid username or password";
+            throw new Error(errorMsg);
         }
         
         // Store token and user info
@@ -377,14 +382,8 @@ loginForm.onsubmit = async (e) => {
         }, 1000);
         
     } catch (error) {
-        // Display field-specific errors or general error
-        if (error.message.includes('username')) {
-            showError('Username already exists. Please choose a different username.');
-        } else if (error.message.includes('email')) {
-            showError('Email already registered. Please use a different email or login.');
-        } else {
-            showError(error.message);
-        }
+        console.error("Login error:", error);
+        showError(error.message);
         btn.disabled = false;
         btn.innerHTML = originalText;
     }
@@ -447,11 +446,11 @@ signupForm.onsubmit = async (e) => {
             for (const [key, value] of Object.entries(data)) {
                 if (Array.isArray(value)) {
                     errors.push(...value);
-                } else {
+                } else if (typeof value === 'string') {
                     errors.push(value);
                 }
             }
-            throw new Error(errors.join(", "));
+            throw new Error(errors.length > 0 ? errors.join(", ") : "Registration failed");
         }
         
         // Store token and user info
@@ -465,6 +464,7 @@ signupForm.onsubmit = async (e) => {
         }, 1500);
         
     } catch (error) {
+        console.error("Signup error:", error);
         showError(error.message);
         btn.disabled = false;
         btn.innerHTML = originalText;

@@ -1,6 +1,6 @@
 class ApiConfig {
   // Change this to your Django backend URL
-  static const String baseUrl = 'http://192.168.29.147:8000/api';// For Android Emulator
+  static const String baseUrl = 'http://10.81.160.80:8000/api';// For Android Emulator
   // static const String baseUrl = 'http://localhost:8000/api'; // For iOS Simulator
   // static const String baseUrl = 'https://your-domain.com/api'; // For production
 

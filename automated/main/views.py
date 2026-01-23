@@ -214,14 +214,12 @@ def file_iterator(file_object, chunk_size=8192):
 
 
 class FileAnalysisViewSet(viewsets.ModelViewSet):
-    queryset = FileAnalysis.objects.all()
     serializer_class = FileAnalysisSerializer
-    
+    permission_classes = [IsAuthenticated]
+
     def get_queryset(self):
-        queryset = super().get_queryset()
-        if self.request.user.is_authenticated:
-            queryset = queryset.filter(user=self.request.user)
-        return queryset
+        return FileAnalysis.objects.filter(user=self.request.user)
+
     
     @action(detail=True, methods=['get'])
     def download_clean(self, request, pk=None):

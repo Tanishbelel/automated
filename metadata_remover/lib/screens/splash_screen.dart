@@ -11,7 +11,8 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
@@ -75,93 +76,75 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF1A1625), Color(0xFF2A2336)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Animated Logo
-              ScaleTransition(
-                scale: _scaleAnimation,
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: Container(
-                    padding: const EdgeInsets.all(40),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF7B61FF), Color(0xFF9D7EFF)],
-                      ),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF7B61FF).withOpacity(0.5),
-                          blurRadius: 40,
-                          spreadRadius: 10,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.shield_rounded,
-                      size: 80,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 40),
-
-              // App Name
-              FadeTransition(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Animated Logo
+            ScaleTransition(
+              scale: _scaleAnimation,
+              child: FadeTransition(
                 opacity: _fadeAnimation,
-                child: const Text(
-                  'Metadata Remover',
-                  style: TextStyle(
+                child: Container(
+                  padding: const EdgeInsets.all(36),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF3182CE),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.shield_rounded,
+                    size: 72,
                     color: Colors.white,
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+            ),
+            const SizedBox(height: 40),
 
-              // Tagline
-              FadeTransition(
-                opacity: _fadeAnimation,
-                child: Text(
-                  'Protect Your Privacy',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontSize: 16,
-                    letterSpacing: 0.5,
-                  ),
+            // App Name
+            FadeTransition(
+              opacity: _fadeAnimation,
+              child: const Text(
+                'Metadata Remover',
+                style: TextStyle(
+                  color: Color(0xFF2D3748),
+                  fontSize: 30,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
                 ),
               ),
-              const SizedBox(height: 60),
+            ),
+            const SizedBox(height: 12),
 
-              // Loading Indicator
-              FadeTransition(
-                opacity: _fadeAnimation,
-                child: SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Colors.white.withOpacity(0.8),
-                    ),
-                  ),
+            // Tagline
+            FadeTransition(
+              opacity: _fadeAnimation,
+              child: const Text(
+                'Protect Your Privacy',
+                style: TextStyle(
+                  color: Color(0xFF718096),
+                  fontSize: 16,
+                  letterSpacing: 0.3,
                 ),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 60),
+
+            // Loading Indicator
+            FadeTransition(
+              opacity: _fadeAnimation,
+              child: const SizedBox(
+                width: 36,
+                height: 36,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  valueColor:
+                  AlwaysStoppedAnimation<Color>(Color(0xFF3182CE)),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -1,11 +1,10 @@
 import 'dart:typed_data';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 
 import '../utils/mobile_download.dart';
-
 import '../services/api_service.dart';
 import '../models/password_validation.dart';
 
@@ -22,6 +21,7 @@ class _EncryptScreenState extends State<EncryptScreen> {
   bool _isProcessing = false;
   bool _isEncryptMode = true;
   Uint8List? _selectedFileBytes;
+  File? _selectedFile; // Add this for mobile
   String? _selectedFileName;
   String _encryptionMethod = 'encrypt';
   PasswordValidation? _passwordValidation;
@@ -36,25 +36,25 @@ class _EncryptScreenState extends State<EncryptScreen> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildModeSelector(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           _buildInfoCard(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           _buildFileSelection(),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           if (_isEncryptMode) ...[
             _buildEncryptionMethodSelector(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
           ],
           _buildPasswordField(),
           const SizedBox(height: 12),
           if (_isEncryptMode && _passwordValidation != null) ...[
             _buildPasswordStrengthIndicator(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
           ],
           _buildProcessButton(),
         ],
@@ -66,8 +66,9 @@ class _EncryptScreenState extends State<EncryptScreen> {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2336),
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
       ),
       child: Row(
         children: [
@@ -111,27 +112,25 @@ class _EncryptScreenState extends State<EncryptScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          gradient: isSelected
-              ? const LinearGradient(
-            colors: [Color(0xFF7B61FF), Color(0xFF9D7EFF)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          )
-              : null,
-          borderRadius: BorderRadius.circular(12),
+          color: isSelected ? const Color(0xFF3182CE) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: Colors.white, size: 20),
+            Icon(
+              icon,
+              color: isSelected ? Colors.white : const Color(0xFF718096),
+              size: 20,
+            ),
             const SizedBox(width: 8),
             Text(
               label,
               style: TextStyle(
-                color: Colors.white,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                color: isSelected ? Colors.white : const Color(0xFF718096),
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                 fontSize: 15,
               ),
             ),
@@ -145,16 +144,14 @@ class _EncryptScreenState extends State<EncryptScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: _isEncryptMode
-              ? [const Color(0xFF7B61FF).withOpacity(0.2), const Color(0xFF9D7EFF).withOpacity(0.1)]
-              : [const Color(0xFF4ECDC4).withOpacity(0.2), const Color(0xFF44A39D).withOpacity(0.1)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
+        color: _isEncryptMode
+            ? const Color(0xFFEBF8FF)
+            : const Color(0xFFF0FFF4),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: (_isEncryptMode ? const Color(0xFF7B61FF) : const Color(0xFF4ECDC4)).withOpacity(0.3),
+          color: _isEncryptMode
+              ? const Color(0xFF3182CE).withOpacity(0.2)
+              : const Color(0xFF38A169).withOpacity(0.2),
           width: 1,
         ),
       ),
@@ -163,17 +160,15 @@ class _EncryptScreenState extends State<EncryptScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: _isEncryptMode
-                    ? [const Color(0xFF7B61FF), const Color(0xFF9D7EFF)]
-                    : [const Color(0xFF4ECDC4), const Color(0xFF44A39D)],
-              ),
-              borderRadius: BorderRadius.circular(12),
+              color: _isEncryptMode
+                  ? const Color(0xFF3182CE)
+                  : const Color(0xFF38A169),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               _isEncryptMode ? Icons.shield_rounded : Icons.vpn_key_rounded,
               color: Colors.white,
-              size: 28,
+              size: 24,
             ),
           ),
           const SizedBox(width: 16),
@@ -182,11 +177,13 @@ class _EncryptScreenState extends State<EncryptScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _isEncryptMode ? 'Password Protect Your Files' : 'Unlock Protected Files',
+                  _isEncryptMode
+                      ? 'Password Protect Your Files'
+                      : 'Unlock Protected Files',
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
+                    color: Color(0xFF2D3748),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -194,8 +191,8 @@ class _EncryptScreenState extends State<EncryptScreen> {
                   _isEncryptMode
                       ? 'Add an extra layer of security with encryption.'
                       : 'Enter password to decrypt your files.',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
+                  style: const TextStyle(
+                    color: Color(0xFF718096),
                     fontSize: 13,
                   ),
                 ),
@@ -214,41 +211,42 @@ class _EncryptScreenState extends State<EncryptScreen> {
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: const Color(0xFF2A2336),
-            borderRadius: BorderRadius.circular(20),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: const Color(0xFF7B61FF).withOpacity(0.3),
-              width: 1.5,
+              color: const Color(0xFFCBD5E0),
+              width: 2,
+              style: BorderStyle.solid,
             ),
           ),
           child: Column(
             children: [
               Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF7B61FF).withOpacity(0.2),
+                padding: const EdgeInsets.all(14),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF7FAFC),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
                   Icons.cloud_upload_rounded,
-                  color: Color(0xFF7B61FF),
-                  size: 40,
+                  color: Color(0xFF3182CE),
+                  size: 36,
                 ),
               ),
               const SizedBox(height: 16),
               const Text(
                 'Select File',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: Color(0xFF2D3748),
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
+              const Text(
                 'Tap to choose a file',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.6),
+                  color: Color(0xFF718096),
                   fontSize: 13,
                 ),
               ),
@@ -261,20 +259,21 @@ class _EncryptScreenState extends State<EncryptScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2336),
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFF7B61FF).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(10),
+              color: const Color(0xFFEBF8FF),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: const Icon(
               Icons.insert_drive_file_rounded,
-              color: Color(0xFF7B61FF),
+              color: Color(0xFF3182CE),
               size: 24,
             ),
           ),
@@ -283,7 +282,7 @@ class _EncryptScreenState extends State<EncryptScreen> {
             child: Text(
               _selectedFileName!,
               style: const TextStyle(
-                color: Colors.white,
+                color: Color(0xFF2D3748),
                 fontWeight: FontWeight.w500,
                 fontSize: 14,
               ),
@@ -292,10 +291,11 @@ class _EncryptScreenState extends State<EncryptScreen> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.close_rounded, color: Colors.white70),
+            icon: const Icon(Icons.close_rounded, color: Color(0xFF718096)),
             onPressed: () {
               setState(() {
                 _selectedFileBytes = null;
+                _selectedFile = null;
                 _selectedFileName = null;
               });
             },
@@ -312,8 +312,8 @@ class _EncryptScreenState extends State<EncryptScreen> {
         const Text(
           'Encryption Method',
           style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
+            color: Color(0xFF2D3748),
+            fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -321,8 +321,9 @@ class _EncryptScreenState extends State<EncryptScreen> {
         Container(
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: const Color(0xFF2A2336),
-            borderRadius: BorderRadius.circular(16),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
           ),
           child: Row(
             children: [
@@ -362,17 +363,17 @@ class _EncryptScreenState extends State<EncryptScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF7B61FF) : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          color: isSelected ? const Color(0xFF3182CE) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Center(
           child: Text(
             label,
             style: TextStyle(
-              color: Colors.white,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              color: isSelected ? Colors.white : const Color(0xFF718096),
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
               fontSize: 14,
             ),
           ),
@@ -384,27 +385,29 @@ class _EncryptScreenState extends State<EncryptScreen> {
   Widget _buildPasswordField() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2336),
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFF7B61FF).withOpacity(0.3),
+          color: const Color(0xFFE2E8F0),
           width: 1,
         ),
       ),
       child: TextField(
         controller: _passwordController,
         obscureText: _obscurePassword,
-        style: const TextStyle(color: Colors.white),
+        style: const TextStyle(color: Color(0xFF2D3748)),
         decoration: InputDecoration(
           labelText: 'Password',
-          labelStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
+          labelStyle: const TextStyle(color: Color(0xFF718096)),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.all(16),
-          prefixIcon: const Icon(Icons.lock_rounded, color: Color(0xFF7B61FF)),
+          prefixIcon: const Icon(Icons.lock_rounded, color: Color(0xFF3182CE)),
           suffixIcon: IconButton(
             icon: Icon(
-              _obscurePassword ? Icons.visibility_rounded : Icons.visibility_off_rounded,
-              color: Colors.white.withOpacity(0.6),
+              _obscurePassword
+                  ? Icons.visibility_rounded
+                  : Icons.visibility_off_rounded,
+              color: const Color(0xFF718096),
             ),
             onPressed: () {
               setState(() {
@@ -422,8 +425,9 @@ class _EncryptScreenState extends State<EncryptScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2336),
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -431,29 +435,30 @@ class _EncryptScreenState extends State<EncryptScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
+              const Text(
                 'Password Strength',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.8),
+                  color: Color(0xFF4A5568),
                   fontSize: 13,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
               Text(
                 '${_passwordValidation!.score}/100',
                 style: TextStyle(
                   color: _getPasswordStrengthColor(_passwordValidation!.strength),
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w700,
                   fontSize: 13,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(6),
             child: LinearProgressIndicator(
               value: _passwordValidation!.score / 100,
-              backgroundColor: Colors.white.withOpacity(0.1),
+              backgroundColor: const Color(0xFFF7FAFC),
               color: _getPasswordStrengthColor(_passwordValidation!.strength),
               minHeight: 8,
             ),
@@ -462,43 +467,49 @@ class _EncryptScreenState extends State<EncryptScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: _getPasswordStrengthColor(_passwordValidation!.strength).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
+              color: _getPasswordStrengthColor(_passwordValidation!.strength)
+                  .withOpacity(0.1),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: _getPasswordStrengthColor(_passwordValidation!.strength)
+                    .withOpacity(0.3),
+                width: 1,
+              ),
             ),
             child: Text(
               _passwordValidation!.strength.toUpperCase(),
               style: TextStyle(
                 color: _getPasswordStrengthColor(_passwordValidation!.strength),
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
               ),
             ),
           ),
           if (_passwordValidation!.feedback.isNotEmpty) ...[
             const SizedBox(height: 12),
-            ...(_passwordValidation!.feedback.map((feedback) => Padding(
+            ..._passwordValidation!.feedback.map((feedback) => Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.info_outline_rounded,
                     size: 16,
-                    color: Colors.white.withOpacity(0.6),
+                    color: Color(0xFF718096),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       feedback,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12,
-                        color: Colors.white.withOpacity(0.7),
+                        color: Color(0xFF4A5568),
                       ),
                     ),
                   ),
                 ],
               ),
-            ))),
+            )).toList(),
           ],
         ],
       ),
@@ -506,54 +517,43 @@ class _EncryptScreenState extends State<EncryptScreen> {
   }
 
   Widget _buildProcessButton() {
-    final isEnabled = _selectedFileBytes != null &&
+    final isEnabled = (_selectedFileBytes != null || _selectedFile != null) &&
         _passwordController.text.isNotEmpty &&
         !_isProcessing;
 
     return Container(
       decoration: BoxDecoration(
-        gradient: isEnabled
-            ? const LinearGradient(
-          colors: [Color(0xFF7B61FF), Color(0xFF9D7EFF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        )
-            : null,
-        color: !isEnabled ? const Color(0xFF2A2336) : null,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: isEnabled
-            ? [
-          BoxShadow(
-            color: const Color(0xFF7B61FF).withOpacity(0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-        ]
-            : null,
+        color: isEnabled ? const Color(0xFF3182CE) : const Color(0xFFE2E8F0),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: isEnabled ? _processFile : null,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 18),
+            padding: const EdgeInsets.symmetric(vertical: 16),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (_isProcessing)
-                  const SizedBox(
+                  SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2.5,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        isEnabled ? Colors.white : const Color(0xFF718096),
+                      ),
                     ),
                   )
                 else
                   Icon(
-                    _isEncryptMode ? Icons.lock_rounded : Icons.lock_open_rounded,
-                    color: Colors.white,
+                    _isEncryptMode
+                        ? Icons.lock_rounded
+                        : Icons.lock_open_rounded,
+                    color: isEnabled ? Colors.white : const Color(0xFF718096),
+                    size: 22,
                   ),
                 const SizedBox(width: 12),
                 Text(
@@ -562,8 +562,8 @@ class _EncryptScreenState extends State<EncryptScreen> {
                       : _isEncryptMode
                       ? 'Encrypt File'
                       : 'Decrypt File',
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: isEnabled ? Colors.white : const Color(0xFF718096),
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
@@ -577,13 +577,40 @@ class _EncryptScreenState extends State<EncryptScreen> {
   }
 
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles();
+    try {
+      final result = await FilePicker.platform.pickFiles();
 
-    if (result != null) {
-      setState(() {
-        _selectedFileBytes = result.files.single.bytes;
-        _selectedFileName = result.files.single.name;
-      });
+      if (result != null && result.files.single.path != null) {
+        // Mobile platform - use File
+        if (!kIsWeb) {
+          final file = File(result.files.single.path!);
+          setState(() {
+            _selectedFile = file;
+            _selectedFileBytes = null;
+            _selectedFileName = result.files.single.name;
+          });
+
+          if (kDebugMode) {
+            print('File selected (Mobile): $_selectedFileName');
+          }
+        }
+      } else if (result != null && result.files.single.bytes != null) {
+        // Web platform - use bytes
+        setState(() {
+          _selectedFileBytes = result.files.single.bytes;
+          _selectedFile = null;
+          _selectedFileName = result.files.single.name;
+        });
+
+        if (kDebugMode) {
+          print('File selected (Web): $_selectedFileName');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('File picker error: $e');
+      }
+      _showErrorSnackBar('Failed to select file: $e');
     }
   }
 
@@ -597,16 +624,23 @@ class _EncryptScreenState extends State<EncryptScreen> {
 
     try {
       final validation = await _apiService.validatePassword(password);
-      setState(() {
-        _passwordValidation = validation;
-      });
+      if (mounted) {
+        setState(() {
+          _passwordValidation = validation;
+        });
+      }
     } catch (e) {
-      // Handle error silently
+      if (kDebugMode) {
+        print('Password validation error: $e');
+      }
     }
   }
 
   Future<void> _processFile() async {
-    if (_selectedFileBytes == null || _passwordController.text.isEmpty) return;
+    if ((_selectedFileBytes == null && _selectedFile == null) || _passwordController.text.isEmpty) {
+      _showErrorSnackBar('Please select a file and enter a password');
+      return;
+    }
 
     setState(() {
       _isProcessing = true;
@@ -616,10 +650,17 @@ class _EncryptScreenState extends State<EncryptScreen> {
       Uint8List resultBytes;
       String downloadFileName;
 
+      // Determine which file type to use
+      final fileToProcess = _selectedFile ?? _selectedFileBytes!;
+
       if (_isEncryptMode) {
         // Encrypt
+        if (kDebugMode) {
+          print('Encrypting file: $_selectedFileName with method: $_encryptionMethod');
+        }
+
         resultBytes = await _apiService.encryptFile(
-          _selectedFileBytes!,
+          fileToProcess,
           _selectedFileName!,
           _passwordController.text,
           _encryptionMethod,
@@ -630,44 +671,54 @@ class _EncryptScreenState extends State<EncryptScreen> {
             : _encryptionMethod == 'pdf'
             ? 'pdf'
             : 'enc';
-        downloadFileName = '${_selectedFileName}_protected.$extension';
+
+        final baseName = _selectedFileName!.contains('.')
+            ? _selectedFileName!.substring(0, _selectedFileName!.lastIndexOf('.'))
+            : _selectedFileName!;
+
+        downloadFileName = '${baseName}_protected.$extension';
 
         // Mobile download
         await downloadMobile(resultBytes, downloadFileName);
 
         if (!mounted) return;
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('File encrypted and downloaded successfully!'),
-            backgroundColor: const Color(0xFF4ECDC4),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
+        _showSuccessSnackBar('File encrypted and downloaded successfully!');
       } else {
         // Decrypt
+        if (kDebugMode) {
+          print('Decrypting file: $_selectedFileName');
+        }
+
         resultBytes = await _apiService.decryptFile(
-          _selectedFileBytes!,
+          fileToProcess,
           _selectedFileName!,
           _passwordController.text,
+          originalFilename: _selectedFileName,
         );
 
-        downloadFileName = '${_selectedFileName}_decrypted';
+        // Determine original filename
+        String baseName = _selectedFileName!;
+        if (baseName.endsWith('_protected.zip')) {
+          baseName = baseName.replaceAll('_protected.zip', '');
+        } else if (baseName.endsWith('_protected.enc')) {
+          baseName = baseName.replaceAll('_protected.enc', '');
+        } else if (baseName.endsWith('_protected.pdf')) {
+          baseName = baseName.replaceAll('_protected.pdf', '.pdf');
+        } else if (baseName.endsWith('.enc')) {
+          baseName = baseName.replaceAll('.enc', '');
+        }
+
+        downloadFileName = baseName.contains('_decrypted')
+            ? baseName
+            : '${baseName}_decrypted';
 
         // Mobile download
         await downloadMobile(resultBytes, downloadFileName);
 
         if (!mounted) return;
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('File decrypted and downloaded successfully!'),
-            backgroundColor: const Color(0xFF4ECDC4),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
+        _showSuccessSnackBar('File decrypted and downloaded successfully!');
       }
 
       // Reset form
@@ -675,36 +726,78 @@ class _EncryptScreenState extends State<EncryptScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Process failed: $e'),
-          backgroundColor: const Color(0xFFFF6B9D),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
+      if (kDebugMode) {
+        print('Process error: $e');
+      }
+
+      String errorMessage = 'Process failed';
+      String errorStr = e.toString().toLowerCase();
+
+      if (errorStr.contains('wrong password') ||
+          errorStr.contains('decryption failed') ||
+          errorStr.contains('401')) {
+        errorMessage = 'Wrong password or corrupted file';
+      } else if (errorStr.contains('timeout')) {
+        errorMessage = 'Request timeout. Please try again.';
+      } else if (errorStr.contains('network')) {
+        errorMessage = 'Network error. Please check your connection.';
+      } else {
+        errorMessage = 'Process failed: $e';
+      }
+
+      _showErrorSnackBar(errorMessage);
     } finally {
-      setState(() {
-        _isProcessing = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
   }
 
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF38A169),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFFE53E3E),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
   void _resetForm() {
-    _selectedFileBytes = null;
-    _selectedFileName = null;
-    _passwordController.clear();
-    _passwordValidation = null;
+    setState(() {
+      _selectedFileBytes = null;
+      _selectedFile = null;
+      _selectedFileName = null;
+      _passwordController.clear();
+      _passwordValidation = null;
+    });
   }
 
   Color _getPasswordStrengthColor(String strength) {
     switch (strength.toLowerCase()) {
       case 'strong':
-        return const Color(0xFF4ECDC4);
+        return const Color(0xFF38A169);
       case 'medium':
-        return const Color(0xFFFFB74D);
+        return const Color(0xFFED8936);
       default:
-        return const Color(0xFFFF6B9D);
+        return const Color(0xFFE53E3E);
     }
   }
 }

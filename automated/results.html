@@ -366,6 +366,17 @@
             background: #475569;
         }
 
+        .debug-section {
+            background: #334155;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 0.9rem;
+            max-height: 300px;
+            overflow: auto;
+        }
+
         @media (max-width: 768px) {
             .header {
                 flex-direction: column;
@@ -418,9 +429,11 @@
         let currentAnalysisId = null;
 
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, checking for analysis data...');
             const analysisData = sessionStorage.getItem('analysis');
             
             if (!analysisData) {
+                console.error('No analysis data found in sessionStorage');
                 document.getElementById('resultsContent').innerHTML = `
                     <div class="error">
                         <h3>❌ No Analysis Data Found</h3>
@@ -433,26 +446,88 @@
                 return;
             }
 
-            const data = JSON.parse(analysisData);
-            console.log('Loaded analysis data:', data);
-            currentAnalysisId = data.analysis_id;
-            displayResults(data);
+            try {
+                const data = JSON.parse(analysisData);
+                console.log('✅ Successfully parsed analysis data:', data);
+                console.log('Metadata entries:', data.metadata_entries);
+                console.log('Type of metadata_entries:', typeof data.metadata_entries);
+                console.log('Is array:', Array.isArray(data.metadata_entries));
+                
+                currentAnalysisId = data.analysis_id;
+                displayResults(data);
+            } catch (error) {
+                console.error('❌ Error parsing analysis data:', error);
+                document.getElementById('resultsContent').innerHTML = `
+                    <div class="error">
+                        <h3>❌ Error Loading Results</h3>
+                        <p style="margin-top: 10px;">${error.message}</p>
+                        <div class="debug-section">
+                            <strong>Raw Data:</strong><br>
+                            ${analysisData}
+                        </div>
+                    </div>
+                `;
+            }
         });
 
         function displayResults(data) {
-            const riskClass = getRiskClass(data.risk_score);
-            const riskLabel = getRiskLabel(data.risk_score);
+            console.log('🎨 Starting to display results for:', data);
+            
+            // Validate data structure
+            if (!data.metadata_entries) {
+                console.error('❌ No metadata_entries found in data');
+                document.getElementById('resultsContent').innerHTML = `
+                    <div class="error">
+                        <h3>❌ Invalid Data Structure</h3>
+                        <p>Missing metadata_entries</p>
+                        <div class="debug-section">
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
 
+            if (!Array.isArray(data.metadata_entries)) {
+                console.error('❌ metadata_entries is not an array:', data.metadata_entries);
+                document.getElementById('resultsContent').innerHTML = `
+                    <div class="error">
+                        <h3>❌ Invalid Data Format</h3>
+                        <p>metadata_entries should be an array</p>
+                        <div class="debug-section">
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            const riskClass = getRiskClass(data.risk_score || 0);
+            const riskLabel = getRiskLabel(data.risk_score || 0);
+
+            // Group metadata by category
             const groupedMetadata = {};
             const riskLevelCounts = { critical: 0, high: 0, medium: 0, low: 0 };
             
-            data.metadata_entries.forEach(entry => {
-                if (!groupedMetadata[entry.category]) {
-                    groupedMetadata[entry.category] = [];
+            console.log(`📊 Processing ${data.metadata_entries.length} metadata entries...`);
+            
+            data.metadata_entries.forEach((entry, index) => {
+                console.log(`Entry ${index}:`, entry);
+                
+                const category = entry.category || 'other';
+                if (!groupedMetadata[category]) {
+                    groupedMetadata[category] = [];
                 }
-                groupedMetadata[entry.category].push(entry);
-                riskLevelCounts[entry.risk_level]++;
+                groupedMetadata[category].push(entry);
+                
+                const riskLevel = entry.risk_level || 'low';
+                if (riskLevelCounts.hasOwnProperty(riskLevel)) {
+                    riskLevelCounts[riskLevel]++;
+                }
             });
+
+            console.log('📁 Grouped metadata:', groupedMetadata);
+            console.log('📈 Risk counts:', riskLevelCounts);
 
             const shareUrl = `${window.location.origin}/share.html?token=${data.share_token}`;
             const qrCodeUrl = `${API_BASE_URL}/analyses/${data.analysis_id}/qr_code/`;
@@ -460,17 +535,17 @@
             let html = `
                 <div class="result-header">
                     <div>
-                        <h2 style="font-size: 1.8rem; margin-bottom: 8px;">📄 ${data.filename}</h2>
-                        <p style="color: #94a3b8; font-size: 1.05rem;">${data.file_type} • ${formatFileSize(data.file_size)}</p>
+                        <h2 style="font-size: 1.8rem; margin-bottom: 8px;">📄 ${data.filename || 'Unknown File'}</h2>
+                        <p style="color: #94a3b8; font-size: 1.05rem;">${data.file_type || 'Unknown'} • ${formatFileSize(data.file_size || 0)}</p>
                     </div>
                     <div class="risk-badge ${riskClass}">
-                        🛡️ Risk: ${data.risk_score}/100 (${riskLabel})
+                        🛡️ Risk: ${data.risk_score || 0}/100 (${riskLabel})
                     </div>
                 </div>
 
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-value">${data.metadata_count}</div>
+                        <div class="stat-value">${data.metadata_count || 0}</div>
                         <div class="stat-label">Total Metadata Found</div>
                     </div>
                     <div class="stat-card">
@@ -495,14 +570,14 @@
 
                 <div class="recommendation-box ${riskClass}">
                     <strong style="font-size: 1.15rem;">💡 Recommendation:</strong>
-                    <p style="margin-top: 12px; line-height: 1.7; font-size: 1.05rem;">${data.risk_recommendation}</p>
+                    <p style="margin-top: 12px; line-height: 1.7; font-size: 1.05rem;">${data.risk_recommendation || 'No recommendation available'}</p>
                 </div>
 
                 <div class="share-section">
                     <h3>📤 Share Clean File</h3>
                     <div class="qr-container">
                         <div class="qr-code">
-                            <img src="${qrCodeUrl}" alt="QR Code" id="qrCodeImg">
+                            <img src="${qrCodeUrl}" alt="QR Code" id="qrCodeImg" onerror="this.parentElement.innerHTML='<p>QR Code unavailable</p>'">
                         </div>
                         <div class="share-details">
                             <p style="margin-bottom: 10px; color: #94a3b8;">Share this link to let others download the cleaned file:</p>
@@ -525,9 +600,14 @@
                 'other': '📋'
             };
 
-            Object.keys(groupedMetadata).sort().forEach(category => {
+            const categories = Object.keys(groupedMetadata).sort();
+            console.log(`📂 Rendering ${categories.length} categories...`);
+
+            categories.forEach(category => {
                 const icon = categoryIcons[category] || '📋';
                 const entries = groupedMetadata[category];
+                
+                console.log(`Rendering category "${category}" with ${entries.length} entries`);
                 
                 html += `
                     <div class="category-section">
@@ -543,16 +623,17 @@
                         <div class="category-content">
                 `;
 
-                entries.forEach(entry => {
+                entries.forEach((entry, idx) => {
+                    console.log(`  Entry ${idx}:`, entry);
                     html += `
-                        <div class="metadata-item ${entry.risk_level}">
+                        <div class="metadata-item ${entry.risk_level || 'low'}">
                             <div class="metadata-header">
-                                <span class="metadata-key">${entry.key}</span>
-                                <span class="risk-badge risk-${entry.risk_level}" style="padding: 5px 15px; font-size: 0.8rem;">
-                                    ${entry.risk_level}
+                                <span class="metadata-key">${entry.key || 'Unknown'}</span>
+                                <span class="risk-badge risk-${entry.risk_level || 'low'}" style="padding: 5px 15px; font-size: 0.8rem;">
+                                    ${entry.risk_level || 'low'}
                                 </span>
                             </div>
-                            <div class="metadata-value">${entry.value}</div>
+                            <div class="metadata-value">${entry.value || 'N/A'}</div>
                         </div>
                     `;
                 });
@@ -577,10 +658,21 @@
                 </div>
             `;
 
+            console.log('✅ Rendering HTML to page...');
             document.getElementById('resultsContent').innerHTML = html;
 
-            document.getElementById('downloadCleanBtn').addEventListener('click', downloadCleanFile);
-            document.getElementById('downloadQrBtn').addEventListener('click', downloadQRCode);
+            // Attach event listeners
+            const downloadCleanBtn = document.getElementById('downloadCleanBtn');
+            const downloadQrBtn = document.getElementById('downloadQrBtn');
+            
+            if (downloadCleanBtn) {
+                downloadCleanBtn.addEventListener('click', downloadCleanFile);
+            }
+            if (downloadQrBtn) {
+                downloadQrBtn.addEventListener('click', downloadQRCode);
+            }
+            
+            console.log('✅ Results displayed successfully!');
         }
 
         function getRiskClass(score) {
@@ -611,18 +703,26 @@
             downloadBtn.innerHTML = '⏳ Downloading...';
 
             try {
+                const token = localStorage.getItem('token');
+                const headers = {
+                    'Content-Type': 'application/json',
+                };
+                
+                if (token) {
+                    headers['Authorization'] = `Token ${token}`;
+                }
+
                 const response = await fetch(`${API_BASE_URL}/clean/`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: headers,
                     body: JSON.stringify({
                         analysis_id: currentAnalysisId
                     })
                 });
 
                 if (!response.ok) {
-                    throw new Error('Download failed');
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || 'Download failed');
                 }
 
                 const blob = await response.blob();
@@ -641,7 +741,8 @@
                     downloadBtn.disabled = false;
                 }, 3000);
             } catch (error) {
-                alert('Error: ' + error.message);
+                console.error('Download error:', error);
+                alert('Error downloading file: ' + error.message);
                 downloadBtn.innerHTML = '⬇️ Download Clean File';
                 downloadBtn.disabled = false;
             }
@@ -676,7 +777,8 @@
                     downloadBtn.disabled = false;
                 }, 3000);
             } catch (error) {
-                alert('Error: ' + error.message);
+                console.error('QR download error:', error);
+                alert('Error downloading QR code: ' + error.message);
                 downloadBtn.innerHTML = '📱 Download QR Code';
                 downloadBtn.disabled = false;
             }
@@ -691,6 +793,9 @@
                 setTimeout(() => {
                     btn.textContent = originalText;
                 }, 2000);
+            }).catch(err => {
+                console.error('Copy failed:', err);
+                alert('Failed to copy link');
             });
         }
     </script>

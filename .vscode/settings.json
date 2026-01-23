@@ -6,5 +6,6 @@
         "media/**"
     ],
     "python-envs.defaultEnvManager": "ms-python.python:system",
-    "python-envs.pythonProjects": []
+    "python-envs.pythonProjects": [],
+    "cmake.sourceDirectory": "C:/Users/Tanish/OneDrive/Desktop/pu/metadata_remover/linux"
 }
