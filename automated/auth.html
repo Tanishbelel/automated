@@ -3,269 +3,445 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Login & Signup - Metadata Removal Tool</title>
+<title>Sign in – Metadata Tool</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Varela+Round&display=swap" rel="stylesheet">
+
+<!-- Google Sign-In -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
+
+html,body{
+  height:100%;
+}
+
 body{
-    font-family:system-ui,Segoe UI,Roboto;
-    background:#0f172a;
-    color:#e2e8f0;
-    padding:20px;
-    min-height:100vh;
-    display:flex;
-    align-items:center;
-    justify-content:center;
+  font-family:"Varela Round",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  background:#f6f7f9;
+  color:#0f172a;
+  overflow:hidden;
 }
 
-.container{max-width:450px;width:100%}
-
-.header{text-align:center;margin-bottom:40px}
-.header h1{
-    font-size:2.5rem;
-    background:linear-gradient(135deg,#667eea,#764ba2);
-    -webkit-background-clip:text;
-    -webkit-text-fill-color:transparent;
-    background-clip:text;
-    margin-bottom:10px;
+.navbar{
+  position:fixed;
+  top:0;
+  left:0;
+  right:0;
+  height:64px;
+  background:#ffffffcc;
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid #e5e7eb;
+  z-index:50;
 }
-.header p{color:#94a3b8;font-size:1.1rem}
+
+.nav-inner{
+  max-width:1200px;
+  height:100%;
+  margin:auto;
+  padding:0 32px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+
+.nav-brand{
+  font-size:1rem;
+  font-weight:500;
+}
+
+.nav-link{
+  font-size:.9rem;
+  color:#2563eb;
+  text-decoration:none;
+}
+
+.page{
+  height:calc(100vh - 64px);
+  margin-top:64px;
+  display:flex;
+  position:relative;
+  z-index:1;
+}
+
+.page::before{
+  content:"";
+  position:fixed;
+  inset:0;
+
+  background:
+    linear-gradient(
+      to right,
+      rgba(37,99,235,.18) 1.5px,
+      transparent 1.5px
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(37,99,235,.18) 1.5px,
+      transparent 1.5px
+    );
+
+  background-size:72px 72px;
+
+  mask-image:radial-gradient(
+    circle at center,
+    rgba(0,0,0,1) 0%,
+    rgba(0,0,0,.85) 28%,
+    rgba(0,0,0,.45) 52%,
+    rgba(0,0,0,0) 72%
+  );
+  -webkit-mask-image:radial-gradient(
+    circle at center,
+    rgba(0,0,0,1) 0%,
+    rgba(0,0,0,.85) 28%,
+    rgba(0,0,0,.45) 52%,
+    rgba(0,0,0,0) 72%
+  );
+
+  pointer-events:none;
+  z-index:0;
+}
+
+.brand{
+  flex:1;
+  padding:0 80px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  z-index:2;
+}
+
+.brand-inner{
+  position:sticky;
+  top:50%;
+  transform:translateY(-50%);
+  max-width:420px;
+}
+
+.brand h1{
+  font-size:3.2rem;
+  font-weight:400;
+  letter-spacing:-.03em;
+  margin-bottom:18px;
+}
+
+.brand p{
+  font-size:1.1rem;
+  color:#475569;
+  line-height:1.6;
+}
+
+.brand::after{
+  content:"";
+  position:absolute;
+  right:0;
+  top:10%;
+  height:80%;
+  width:1px;
+  background:#e5e7eb;
+}
+
+.form-area{
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:64px;
+  transform:translateY(-24px);
+}
 
 .card{
-    background:#1e293b;
-    padding:40px;
-    border-radius:20px;
-    border:1px solid #334155;
-    box-shadow:0 20px 60px rgba(0,0,0,.5);
+  max-width:800px;
+  margin:0 auto;
+  background:#fff;
+  padding:30px 50px;
+  border-radius:28px;
+  border:1px solid #e5e7eb;
+  box-shadow:
+    0 40px 90px rgba(15,23,42,.08),
+    0 1px 0 rgba(15,23,42,.04);
 }
 
 .tabs{
-    display:flex;
-    gap:10px;
-    margin-bottom:30px;
+  display:flex;
+  background:#f1f5f9;
+  border-radius:14px;
+  padding:4px;
+  margin-bottom:28px;
 }
 
 .tab{
-    flex:1;
-    padding:12px;
-    text-align:center;
-    background:#0f172a;
-    border:2px solid #334155;
-    border-radius:10px;
-    cursor:pointer;
-    transition:.3s;
-    font-weight:600;
+  flex:1;
+  text-align:center;
+  padding:10px;
+  font-size:.9rem;
+  border-radius:10px;
+  cursor:pointer;
+  color:#64748b;
 }
 
 .tab.active{
-    background:linear-gradient(135deg,#667eea,#764ba2);
-    border-color:transparent;
-    color:#fff;
+  background:#fff;
+  color:#0f172a;
+  box-shadow:0 1px 3px rgba(0,0,0,.08);
 }
 
-.form-group{margin-bottom:20px}
+.form-group{margin-bottom:18px}
 
-.form-group label{
-    display:block;
-    margin-bottom:8px;
-    color:#94a3b8;
-    font-size:.9rem;
-    font-weight:500;
+input{
+  width:100%;
+  padding:14px 16px;
+  border-radius:14px;
+  border:1px solid #e5e7eb;
+  background:#f8fafc;
+  font-size:.95rem;
 }
 
-.form-group input{
-    width:100%;
-    padding:14px;
-    border-radius:10px;
-    font-size:1rem;
-    background:#0f172a;
-    color:#e2e8f0;
-    border:2px solid #334155;
-    transition:.3s;
+input:focus{
+  outline:none;
+  border-color:#0054AE;
+  background:#fff;
 }
-
-.form-group input:focus{
-    outline:none;
-    border-color:#667eea;
-}
-
-.form-group input::placeholder{color:#475569}
 
 button{
-    width:100%;
-    padding:16px;
-    border-radius:10px;
-    font-size:1.05rem;
-    border:none;
-    cursor:pointer;
-    background:linear-gradient(135deg,#667eea,#764ba2);
-    color:#fff;
-    font-weight:600;
-    transition:.3s;
-    margin-top:10px;
+  width:100%;
+  margin-top:10px;
+  padding:14px;
+  border-radius:14px;
+  border:none;
+  background:#111;
+  color:#fff;
+  font-size:.95rem;
+  font-weight:500;
+  cursor:pointer;
 }
 
-button:hover{
-    transform:translateY(-2px);
-    box-shadow:0 10px 25px rgba(102,126,234,.3);
-}
-
-button:disabled{
-    opacity:.5;
-    cursor:not-allowed;
-    transform:none;
-}
+button:hover{background:#000}
+button:disabled{opacity:.6}
 
 .error{
-    background:rgba(239,68,68,.2);
-    border:2px solid #ef4444;
-    padding:12px;
-    border-radius:10px;
-    margin-bottom:20px;
-    color:#ef4444;
-    font-size:.95rem;
+  background:#fee2e2;
+  border:1px solid #fecaca;
+  padding:12px;
+  border-radius:14px;
+  margin-bottom:20px;
+  color:#b91c1c;
 }
 
 .success{
-    background:rgba(34,197,94,.2);
-    border:2px solid #22c55e;
-    padding:12px;
-    border-radius:10px;
-    margin-bottom:20px;
-    color:#22c55e;
-    font-size:.95rem;
+  background:#dcfce7;
+  border:1px solid #bbf7d0;
+  padding:12px;
+  border-radius:14px;
+  margin-bottom:20px;
+  color:#166534;
 }
 
 .hidden{display:none}
 
-.link-text{
-    text-align:center;
-    margin-top:20px;
-    color:#94a3b8;
-    font-size:.95rem;
-}
-
-.link-text a{
-    color:#667eea;
-    text-decoration:none;
-    font-weight:600;
-}
-
-.link-text a:hover{text-decoration:underline}
-
-.password-strength{
-    margin-top:8px;
-    font-size:.85rem;
-}
-
+.password-strength{margin-top:8px;font-size:.8rem}
 .strength-bar{
-    height:4px;
-    background:#334155;
-    border-radius:2px;
-    margin-top:5px;
-    overflow:hidden;
+  height:4px;
+  background:#e5e7eb;
+  border-radius:2px;
+  margin-top:6px;
 }
-
-.strength-fill{
-    height:100%;
-    width:0;
-    transition:.3s;
-    border-radius:2px;
-}
-
+.strength-fill{height:100%;transition:.3s}
 .strength-weak{background:#ef4444;width:33%}
 .strength-medium{background:#f59e0b;width:66%}
 .strength-strong{background:#22c55e;width:100%}
 
-.loading-spinner{
-    display:inline-block;
-    width:16px;
-    height:16px;
-    border:2px solid #fff;
-    border-top:2px solid transparent;
-    border-radius:50%;
-    animation:spin .6s linear infinite;
+/* ===== DIVIDER ===== */
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 24px 0;
+  color: #94a3b8;
+  font-size: .85rem;
 }
 
-@keyframes spin{to{transform:rotate(360deg)}}
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.divider::before {
+  margin-right: 16px;
+}
+
+.divider::after {
+  margin-left: 16px;
+}
+
+/* ===== GOOGLE BUTTON ===== */
+.google-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #0f172a;
+  font-size: .95rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  transition: all 0.2s;
+  margin-bottom: 10px;
+}
+
+.google-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.google-btn:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+.google-icon {
+  width: 20px;
+  height: 20px;
+}
+
+@media(max-width:900px){
+  body{overflow:auto}
+  .page{flex-direction:column}
+  .brand{
+    padding:48px 32px;
+  }
+  .brand::after{display:none}
+  .form-area{padding:48px 0}
+}
+
+.page{
+  position:relative;
+  z-index:1;
+}
+
+.navbar,
+.brand,
+.form-area{
+  position:relative;
+  z-index:2;
+}
+
 </style>
 </head>
 
 <body>
-<div class="container">
-    <div class="header">
-        <h1>🛡️ Welcome</h1>
-        <p>Secure your files with metadata removal</p>
+
+<div class="page">
+
+  <section class="brand">
+    <div class="brand-inner">
+      <h1>Securing your files</br>is just a 'click' away.</h1>
     </div>
+  </section>
+
+  <section class="form-area">
 
     <div class="card">
-        <div class="tabs">
-            <div class="tab active" id="loginTab">Login</div>
-            <div class="tab" id="signupTab">Sign Up</div>
+
+      <div class="tabs">
+        <div class="tab active" id="loginTab">Login</div>
+        <div class="tab" id="signupTab">Sign Up</div>
+      </div>
+
+      <div id="message"></div>
+
+      <!-- LOGIN -->
+      <form id="loginForm">
+        <!-- Google Sign-In Button -->
+        <button type="button" class="google-btn" id="googleLoginBtn">
+          <svg class="google-icon" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          </svg>
+          Continue with Google
+        </button>
+
+        <div class="divider">or continue with email</div>
+
+        <div class="form-group">
+          <input type="text" id="loginUsername" placeholder="Username" required>
         </div>
-
-        <div id="message"></div>
-
-        <!-- Login Form -->
-        <form id="loginForm">
-            <div class="form-group">
-                <label>Username</label>
-                <input type="text" id="loginUsername" placeholder="Enter username" required>
-            </div>
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" id="loginPassword" placeholder="Enter password" required>
-            </div>
-            <button type="submit" id="loginBtn">
-                🔓 Login
-            </button>
-        </form>
-
-        <!-- Signup Form -->
-        <form id="signupForm" class="hidden">
-            <div class="form-group">
-                <label>Username</label>
-                <input type="text" id="signupUsername" placeholder="Choose username" required>
-            </div>
-            <div class="form-group">
-                <label>Email</label>
-                <input type="email" id="signupEmail" placeholder="your@email.com" required>
-            </div>
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" id="signupPassword" placeholder="Create strong password" required>
-                <div class="password-strength hidden" id="strengthIndicator">
-                    <div class="strength-bar">
-                        <div class="strength-fill" id="strengthFill"></div>
-                    </div>
-                    <span id="strengthText"></span>
-                </div>
-            </div>
-            <div class="form-group">
-                <label>Confirm Password</label>
-                <input type="password" id="signupPassword2" placeholder="Re-enter password" required>
-            </div>
-            <div class="form-group">
-                <label>First Name (Optional)</label>
-                <input type="text" id="signupFirstName" placeholder="First name">
-            </div>
-            <div class="form-group">
-                <label>Last Name (Optional)</label>
-                <input type="text" id="signupLastName" placeholder="Last name">
-            </div>
-            <button type="submit" id="signupBtn">
-                ✨ Create Account
-            </button>
-        </form>
-
-        <div class="link-text">
-            <a href="index.html">← Back to Home</a>
+        <div class="form-group">
+          <input type="password" id="loginPassword" placeholder="Password" required>
         </div>
+        <button type="submit" id="loginBtn">Sign in</button>
+      </form>
+
+      <!-- SIGNUP -->
+      <form id="signupForm" class="hidden">
+        <!-- Google Sign-In Button -->
+        <button type="button" class="google-btn" id="googleSignupBtn">
+          <svg class="google-icon" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          </svg>
+          Sign up with Google
+        </button>
+
+        <div class="divider">or sign up with email</div>
+
+        <div class="form-group">
+          <input type="text" id="signupUsername" placeholder="Username" required>
+        </div>
+        <div class="form-group">
+          <input type="email" id="signupEmail" placeholder="Email" required>
+        </div>
+        <div class="form-group">
+          <input type="password" id="signupPassword" placeholder="Password" required>
+          <div class="password-strength hidden" id="strengthIndicator">
+            <div class="strength-bar">
+              <div class="strength-fill" id="strengthFill"></div>
+            </div>
+            <span id="strengthText"></span>
+          </div>
+        </div>
+        <div class="form-group">
+          <input type="password" id="signupPassword2" placeholder="Confirm password" required>
+        </div>
+        <div class="form-group">
+          <input type="text" id="signupFirstName" placeholder="First name (optional)">
+        </div>
+        <div class="form-group">
+          <input type="text" id="signupLastName" placeholder="Last name (optional)">
+        </div>
+        <button type="submit" id="signupBtn">Create account</button>
+      </form>
+
     </div>
+
+  </section>
+
+</div>
+
+<!-- Hidden div for Google One Tap -->
+<div id="g_id_onload"
+     data-client_id="YOUR_GOOGLE_CLIENT_ID"
+     data-callback="handleGoogleCredential"
+     data-auto_prompt="false">
 </div>
 
 <script>
 const API = "http://127.0.0.1:8000/api";
+
+// IMPORTANT: Replace with your actual Google Client ID
+const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID";
 
 // Tab switching
 const loginTab = document.getElementById("loginTab");
@@ -340,6 +516,88 @@ function clearMessage() {
     messageDiv.innerHTML = "";
 }
 
+// ===== GOOGLE AUTHENTICATION =====
+
+// Initialize Google Sign-In when page loads
+window.onload = function() {
+    // Update the hidden div with actual client ID
+    document.getElementById('g_id_onload').setAttribute('data-client_id', GOOGLE_CLIENT_ID);
+    
+    // Initialize Google button
+    if (window.google) {
+        google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: handleGoogleCredential
+        });
+    }
+};
+
+// Handle Google credential response
+async function handleGoogleCredential(response) {
+    clearMessage();
+    
+    const btn = document.getElementById("googleLoginBtn") || document.getElementById("googleSignupBtn");
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span>🔄</span> Authenticating...';
+    }
+    
+    try {
+        const res = await fetch(`${API}/auth/google/verify/`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                id_token: response.credential
+            })
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+            throw new Error(data.error || "Google authentication failed");
+        }
+        
+        // Store token and user info
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("user", JSON.stringify(data.user));
+        
+        showSuccess("Google login successful! Redirecting...");
+        
+        setTimeout(() => {
+            window.location.href = "index.html";
+        }, 1000);
+        
+    } catch (error) {
+        showError(error.message);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<svg class="google-icon" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>Continue with Google';
+        }
+    }
+}
+
+// Google Login button click handler
+document.getElementById("googleLoginBtn").onclick = function() {
+    if (window.google) {
+        google.accounts.id.prompt(); // Show One Tap dialog
+    } else {
+        showError("Google Sign-In not loaded. Please refresh the page.");
+    }
+};
+
+// Google Signup button click handler
+document.getElementById("googleSignupBtn").onclick = function() {
+    if (window.google) {
+        google.accounts.id.prompt(); // Show One Tap dialog
+    } else {
+        showError("Google Sign-In not loaded. Please refresh the page.");
+    }
+};
+
+// ===== REGULAR EMAIL/PASSWORD AUTHENTICATION =====
+
 // Login handler
 loginForm.onsubmit = async (e) => {
     e.preventDefault();
@@ -348,7 +606,7 @@ loginForm.onsubmit = async (e) => {
     const btn = document.getElementById("loginBtn");
     const originalText = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<span class="loading-spinner"></span> Logging in...';
+    btn.innerHTML = '🔄 Logging in...';
     
     const username = document.getElementById("loginUsername").value;
     const password = document.getElementById("loginPassword").value;
@@ -363,15 +621,9 @@ loginForm.onsubmit = async (e) => {
         const data = await response.json();
         
         if (!response.ok) {
-            // Handle login errors
-            const errorMsg = data.non_field_errors?.[0] 
-                || data.detail 
-                || data.error
-                || "Invalid username or password";
-            throw new Error(errorMsg);
+            throw new Error(data.non_field_errors?.[0] || data.detail || "Login failed");
         }
         
-        // Store token and user info
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data.user));
         
@@ -382,8 +634,13 @@ loginForm.onsubmit = async (e) => {
         }, 1000);
         
     } catch (error) {
-        console.error("Login error:", error);
-        showError(error.message);
+        if (error.message.includes('username')) {
+            showError('Username already exists. Please choose a different username.');
+        } else if (error.message.includes('email')) {
+            showError('Email already registered. Please use a different email or login.');
+        } else {
+            showError(error.message);
+        }
         btn.disabled = false;
         btn.innerHTML = originalText;
     }
@@ -397,7 +654,7 @@ signupForm.onsubmit = async (e) => {
     const btn = document.getElementById("signupBtn");
     const originalText = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<span class="loading-spinner"></span> Creating account...';
+    btn.innerHTML = '🔄 Creating account...';
     
     const username = document.getElementById("signupUsername").value;
     const email = document.getElementById("signupEmail").value;
@@ -430,7 +687,6 @@ signupForm.onsubmit = async (e) => {
         const data = await response.json();
         
         if (!response.ok) {
-            // Handle field-specific errors from Django
             if (data.username) {
                 throw new Error(`Username: ${data.username[0]}`);
             }
@@ -441,19 +697,17 @@ signupForm.onsubmit = async (e) => {
                 throw new Error(`Password: ${data.password[0]}`);
             }
             
-            // Handle general errors
             const errors = [];
             for (const [key, value] of Object.entries(data)) {
                 if (Array.isArray(value)) {
                     errors.push(...value);
-                } else if (typeof value === 'string') {
+                } else {
                     errors.push(value);
                 }
             }
-            throw new Error(errors.length > 0 ? errors.join(", ") : "Registration failed");
+            throw new Error(errors.join(", "));
         }
         
-        // Store token and user info
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data.user));
         
@@ -464,7 +718,6 @@ signupForm.onsubmit = async (e) => {
         }, 1500);
         
     } catch (error) {
-        console.error("Signup error:", error);
         showError(error.message);
         btn.disabled = false;
         btn.innerHTML = originalText;
@@ -476,5 +729,6 @@ if (localStorage.getItem("token")) {
     window.location.href = "index.html";
 }
 </script>
+
 </body>
 </html>

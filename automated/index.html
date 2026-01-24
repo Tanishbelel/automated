@@ -53,7 +53,31 @@ body{
 
 .logo{font-size:1.3rem}
 
-.nav-buttons{display:flex;gap:12px}
+.nav-buttons{display:flex;gap:12px;align-items:center}
+
+#guestNav{display:flex;gap:12px;align-items:center}
+#userNav{display:flex;gap:12px;align-items:center}
+
+.user-info{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  font-size:.9rem;
+  color:#444;
+}
+
+.user-avatar{
+  width:32px;
+  height:32px;
+  border-radius:50%;
+  background:linear-gradient(135deg, #0054AE, #0076D6);
+  color:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:500;
+  font-size:.85rem;
+}
 
 .btn{
   padding:11px 22px;
@@ -64,6 +88,7 @@ body{
   text-decoration:none;
   font-size:.9rem;
   transition:.25s cubic-bezier(.22,1.6,.36,1);
+  cursor:pointer;
 }
 
 .btn-primary{
@@ -76,9 +101,18 @@ body{
   color:#0054AE;
   border-color:#0054AE;
 }
+.btn-logout{
+  background:#ef4444;
+  color:#fff;
+  border-color:#ef4444;
+}
 .btn:hover{
   transform:translateY(-2px);
   box-shadow:0 10px 26px rgba(0,0,0,.18);
+}
+
+.hidden{
+  display:none !important;
 }
 
 /* ================= HERO ================= */
@@ -146,7 +180,7 @@ body{
 .split-text span{
   display:inline-block;
   opacity:0;
-  transform:translateY(-60px) scale(.95); /* TOP → DOWN */
+  transform:translateY(-60px) scale(.95);
   filter:blur(10px);
 }
 .page-loaded .split-text span{
@@ -231,6 +265,33 @@ body{
   color:#444;
   line-height:1.6;
 }
+
+/* ================= RESPONSIVE ================= */
+@media(max-width:768px){
+  .navbar{
+    padding:16px 24px;
+  }
+  .logo{
+    font-size:1.1rem;
+  }
+  .user-info span{
+    display:none;
+  }
+  .hero{
+    width:calc(100% - 32px);
+    height:480px;
+  }
+  .hero h1{
+    font-size:2.2rem;
+  }
+  .hero-sub{
+    font-size:1rem;
+  }
+  .feature-list{
+    grid-template-columns:1fr;
+    gap:24px;
+  }
+}
 </style>
 </head>
 
@@ -239,7 +300,20 @@ body{
 <nav class="navbar" data-animate data-delay="1">
   <div class="logo">Automated Metadata Removal Tool</div>
   <div class="nav-buttons">
-    <a href="auth.html" class="btn btn-primary">Join Us</a>
+    <!-- Guest Navigation (shown when NOT logged in) -->
+    <div id="guestNav">
+      <a href="auth.html" class="btn btn-primary">Join Us</a>
+    </div>
+
+    <!-- User Navigation (shown when logged in) -->
+    <div id="userNav" class="hidden">
+      <div class="user-info">
+        <div class="user-avatar" id="userAvatar"></div>
+        <span id="userName"></span>
+      </div>
+      <a href="profile.html" class="btn btn-ghost">Dashboard</a>
+      <button class="btn btn-logout" id="logoutBtn">Logout</button>
+    </div>
   </div>
 </nav>
 
@@ -288,12 +362,104 @@ body{
 </section>
 
 <script>
-/* PAGE LOAD */
+const API = "http://127.0.0.1:8000/api";
+
+/* ================= AUTH LOGIC ================= */
+function checkAuthStatus() {
+  const token = localStorage.getItem("token");
+  const userStr = localStorage.getItem("user");
+  
+  const guestNav = document.getElementById("guestNav");
+  const userNav = document.getElementById("userNav");
+  const userAvatar = document.getElementById("userAvatar");
+  const userName = document.getElementById("userName");
+  
+  if (token && userStr) {
+    try {
+      const user = JSON.parse(userStr);
+      
+      // Show user navigation
+      guestNav.classList.add("hidden");
+      userNav.classList.remove("hidden");
+      
+      // Set user info
+      const initials = getInitials(user);
+      userAvatar.textContent = initials;
+      userName.textContent = `Hi, ${user.first_name || user.username}`;
+      
+    } catch (error) {
+      console.error("Error parsing user data:", error);
+      showGuestNav();
+    }
+  } else {
+    showGuestNav();
+  }
+}
+
+function showGuestNav() {
+  const guestNav = document.getElementById("guestNav");
+  const userNav = document.getElementById("userNav");
+  
+  guestNav.classList.remove("hidden");
+  userNav.classList.add("hidden");
+}
+
+function getInitials(user) {
+  if (user.first_name && user.last_name) {
+    return (user.first_name[0] + user.last_name[0]).toUpperCase();
+  } else if (user.first_name) {
+    return user.first_name.substring(0, 2).toUpperCase();
+  } else if (user.username) {
+    return user.username.substring(0, 2).toUpperCase();
+  }
+  return "U";
+}
+
+/* ================= LOGOUT HANDLER ================= */
+document.getElementById("logoutBtn").addEventListener("click", async function() {
+  const token = localStorage.getItem("token");
+  
+  // Disable button during logout
+  this.disabled = true;
+  this.textContent = "Logging out...";
+  
+  try {
+    // Call logout API
+    await fetch(`${API}/auth/logout/`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Token ${token}`,
+        "Content-Type": "application/json"
+      }
+    });
+  } catch (error) {
+    console.error("Logout error:", error);
+  } finally {
+    // Clear local storage regardless of API response
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    
+    // Show guest navigation
+    showGuestNav();
+    
+    // Reset button
+    this.disabled = false;
+    this.textContent = "Logout";
+    
+    // Optional: Show a message or redirect
+    window.location.reload();
+  }
+});
+
+// Check auth status on page load
+checkAuthStatus();
+
+/* ================= PAGE LOAD ================= */
 window.addEventListener('load',()=>{
   document.body.classList.add('page-loaded');
 });
 
-/* SPLIT TEXT */
+/* ================= SPLIT TEXT ================= */
 const title=document.getElementById('heroTitle');
 const text=title.textContent.trim();
 title.textContent='';
@@ -304,7 +470,7 @@ title.textContent='';
   title.appendChild(span);
 });
 
-/* GRID ANIMATION */
+/* ================= GRID ANIMATION ================= */
 const grid=document.getElementById('grid');
 const hero=document.getElementById('hero');
 const total=31*13;

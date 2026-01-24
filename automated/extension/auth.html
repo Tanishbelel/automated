@@ -1,0 +1,209 @@
+<!-- -- darsh: Extension auth page for signup/login -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up / Login</title>
+    <link rel="stylesheet" href="popup.css">
+    <style>
+        body {
+            font-family: 'Varela Round', sans-serif;
+            background: var(--bg-primary);
+            width: 420px;
+            margin: 0;
+        }
+
+        .auth-container {
+            padding: 24px 20px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            margin: 8px;
+            background: var(--bg-primary);
+            box-shadow: var(--shadow-lg);
+            min-height: calc(100% - 16px);
+        }
+
+        .auth-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .auth-tab {
+            flex: 1;
+            padding: 12px;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: -2px;
+        }
+
+        .auth-tab.active {
+            color: var(--accent-primary);
+            border-bottom-color: var(--accent-primary);
+        }
+
+        .auth-content {
+            display: none;
+        }
+
+        .auth-content.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1.5px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-family: 'Varela Round', sans-serif;
+            transition: border-color 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 12px;
+            background: var(--accent-primary);
+            color: white;
+            border: none;
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-submit:hover:not(:disabled) {
+            background: var(--accent-hover);
+        }
+
+        .btn-submit:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .auth-message {
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            margin-bottom: 12px;
+        }
+
+        .auth-message.error {
+            background: #fee2e2;
+            color: var(--danger);
+            border: 1px solid #fecaca;
+        }
+
+        .auth-message.success {
+            background: #d1fae5;
+            color: var(--success);
+            border: 1px solid #a7f3d0;
+        }
+
+        .back-link {
+            display: block;
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+            text-decoration: none;
+            margin-top: 16px;
+        }
+
+        .back-link:hover {
+            color: var(--accent-primary);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="auth-container">
+        <h1 style="text-align: center; font-size: 20px; margin-bottom: 20px;">Welcome</h1>
+
+        <div class="auth-tabs">
+            <button class="auth-tab active" id="loginTab">Login</button>
+            <button class="auth-tab" id="signupTab">Sign Up</button>
+        </div>
+
+        <!-- Login Form -->
+        <div class="auth-content active" id="loginContent">
+            <div id="loginMessage" class="auth-message hidden"></div>
+
+            <form id="loginForm">
+                <div class="form-group">
+                    <label class="form-label">Username or Email</label>
+                    <input type="text" class="form-input" id="loginUsername" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-input" id="loginPassword" required>
+                </div>
+
+                <button type="submit" class="btn-submit" id="loginBtn">Login</button>
+            </form>
+        </div>
+
+        <!-- Signup Form -->
+        <div class="auth-content" id="signupContent">
+            <div id="signupMessage" class="auth-message hidden"></div>
+
+            <form id="signupForm">
+                <div class="form-group">
+                    <label class="form-label">Username</label>
+                    <input type="text" class="form-input" id="signupUsername" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-input" id="signupEmail" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-input" id="signupPassword" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Confirm Password</label>
+                    <input type="password" class="form-input" id="signupConfirmPassword" required>
+                </div>
+
+                <button type="submit" class="btn-submit" id="signupBtn">Sign Up</button>
+            </form>
+        </div>
+
+        <a href="popup.html" class="back-link">← Back to Main</a>
+    </div>
+
+    <script src="auth.js"></script>
+</body>
+
+</html>

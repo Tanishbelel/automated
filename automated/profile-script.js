@@ -128,7 +128,9 @@ function renderHistory() {
                 </div>
             </div>
             
-            <span class="risk-badge risk-${riskLevel}">${riskLevel} risk</span>
+            <span class="risk-badge risk-${riskLevel}">
+  ${riskLevel.charAt(0).toUpperCase() + riskLevel.slice(1)} Risk
+</span>
             
             <div class="stats-row">
                 <div class="stat-mini">
@@ -142,12 +144,8 @@ function renderHistory() {
             </div>
             
             <div class="history-actions">
-                <button class="btn-secondary btn-small" onclick="viewComparison('${file.id}')">
-                    🔍 Compare
-                </button>
-                <button class="btn-secondary btn-small" onclick="downloadClean('${file.id}')">
-                    ⬇️ Download
-                </button>
+                <button class="btn-secondary btn-small">Compare</button>
+<button class="btn-secondary btn-small">Download</button>
             </div>
         `;
         
@@ -187,19 +185,23 @@ async function viewComparison(fileId) {
         const removedCount = beforeCount;
         
         content.innerHTML = `
-            <div style="background:#0f172a;padding:20px;border-radius:10px;margin-bottom:20px">
-                <h4 style="margin-bottom:15px;color:#e2e8f0">📊 Summary</h4>
+            <div style="background:#f8fafc;padding:20px;border-radius:18px;margin-bottom:24px;border:1px solid #e5e7eb">
+                <h4 style="margin-bottom:15px;color:#0f172a;font-weight:400">
+📊 Summary</h4>
                 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:15px">
                     <div style="text-align:center">
-                        <div style="font-size:2rem;font-weight:700;color:#ef4444">${beforeCount}</div>
+                        <div style="font-size:2rem;font-weight:700;color:#0054AE
+">${beforeCount}</div>
                         <div style="font-size:.8rem;color:#94a3b8">Before</div>
                     </div>
                     <div style="text-align:center">
-                        <div style="font-size:2rem;font-weight:700;color:#22c55e">${removedCount}</div>
+                        <div style="font-size:2rem;font-weight:700;color:#0054AE
+">${removedCount}</div>
                         <div style="font-size:.8rem;color:#94a3b8">Removed</div>
                     </div>
                     <div style="text-align:center">
-                        <div style="font-size:2rem;font-weight:700;color:#22c55e">${afterCount}</div>
+                        <div style="font-size:2rem;font-weight:700;color:#0054AE
+">${afterCount}</div>
                         <div style="font-size:.8rem;color:#94a3b8">After</div>
                     </div>
                 </div>
@@ -225,7 +227,8 @@ async function viewComparison(fileId) {
                     <div class="metadata-list">
                         <div class="empty-state">
                             <div class="empty-state-icon">✅</div>
-                            <p style="color:#22c55e;font-weight:600">All metadata removed!</p>
+                            <p style="color:#0054AE;font-weight:500">
+All metadata removed!</p>
                             <p style="font-size:.9rem">Your file is now clean and safe to share</p>
                         </div>
                     </div>

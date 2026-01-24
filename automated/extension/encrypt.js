@@ -346,6 +346,16 @@ async function performEncryption() {
         hideLoading();
         showSuccess('encrypt', `File encrypted successfully! Saved as "${encryptedFilename}"`);
 
+        // -- darsh: Increment encrypted files count for dashboard using chrome storage
+        chrome.storage.local.get(['encryptedFilesCount'], (result) => {
+            const currentCount = result.encryptedFilesCount || 0;
+            chrome.storage.local.set({ encryptedFilesCount: currentCount + 1 });
+        });
+
+        // Also update localStorage for fallback compatibility
+        const localCount = parseInt(localStorage.getItem('encryptedFilesCount') || '0');
+        localStorage.setItem('encryptedFilesCount', (localCount + 1).toString());
+
         // Reset form
         setTimeout(() => {
             resetEncryptFile();

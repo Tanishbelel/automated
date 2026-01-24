@@ -7,13 +7,14 @@ from .views import (
     AnalyzeFileView,
     CleanFileView,
     CleanAndDownloadView,
+    GoogleLoginTokenView,
     ShareFileView,
     MakePublicView,
     PlatformRuleViewSet,
     HealthCheckView,
     ValidatePasswordView,
     RegisterView, LoginView, LogoutView, UserProfileView,
-    UpdateProfileView, ChangePasswordView, DeleteAccountView
+    UpdateProfileView, ChangePasswordView, DeleteAccountView,GoogleCallbackView, GoogleLoginView
 )
 
 
@@ -30,6 +31,9 @@ urlpatterns = [
     path('auth/profile/update/', UpdateProfileView.as_view(), name='auth-profile-update'),
     path('auth/change-password/', ChangePasswordView.as_view(), name='auth-change-password'),
     path('auth/delete-account/', DeleteAccountView.as_view(), name='auth-delete-account'),
+    path('api/auth/google/login/', GoogleLoginView.as_view(), name='google-login'),
+    path('api/auth/google/callback/', GoogleCallbackView.as_view(), name='google-callback'),
+    path('api/auth/google/verify/', GoogleLoginTokenView.as_view(), name='google-verify'),
     
     path('analyze/', AnalyzeFileView.as_view(), name='analyze-file'),
     path('clean/', CleanFileView.as_view(), name='clean-file'),

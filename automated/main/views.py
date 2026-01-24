@@ -25,6 +25,173 @@ from .serializers import (
     RegisterSerializer, LoginSerializer, UserSerializer,
     ChangePasswordSerializer, UpdateProfileSerializer
 )
+import requests
+from django.conf import settings
+import time
+
+from .utils.google_auth import GoogleOAuth
+from django.shortcuts import redirect
+
+class GoogleLoginView(APIView):
+    """
+    Initiate Google OAuth login
+    GET /api/auth/google/login/
+    """
+    permission_classes = (AllowAny,)
+    
+    def get(self, request):
+        auth_url = GoogleOAuth.get_google_auth_url()
+        return Response({
+            'auth_url': auth_url,
+            'message': 'Redirect user to this URL'
+        })
+
+
+class GoogleCallbackView(APIView):
+    """
+    Google OAuth callback endpoint
+    GET /api/auth/google/callback/?code=...
+    """
+    permission_classes = (AllowAny,)
+    
+    def get(self, request):
+        code = request.GET.get('code')
+        
+        if not code:
+            return Response(
+                {'error': 'Authorization code not provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Exchange code for tokens
+            token_data = GoogleOAuth.exchange_code_for_token(code)
+            access_token = token_data.get('access_token')
+            
+            # Get user info from Google
+            user_info = GoogleOAuth.get_user_info(access_token)
+            
+            email = user_info.get('email')
+            first_name = user_info.get('given_name', '')
+            last_name = user_info.get('family_name', '')
+            google_id = user_info.get('id')
+            
+            # Check if user exists
+            user = User.objects.filter(email=email).first()
+            
+            if not user:
+                # Create new user
+                username = email.split('@')[0]
+                
+                # Ensure unique username
+                base_username = username
+                counter = 1
+                while User.objects.filter(username=username).exists():
+                    username = f"{base_username}{counter}"
+                    counter += 1
+                
+                user = User.objects.create_user(
+                    username=username,
+                    email=email,
+                    first_name=first_name,
+                    last_name=last_name
+                )
+                user.set_unusable_password()  # No password for OAuth users
+                user.save()
+            
+            # Create or get token
+            token, created = Token.objects.get_or_create(user=user)
+            
+            # Login user
+            login(request, user)
+            
+            # Redirect to frontend with token (adjust URL as needed)
+            frontend_url = f"http://localhost:3000/auth/callback?token={token.key}"
+            return redirect(frontend_url)
+            
+        except Exception as e:
+            import traceback
+            print("Google OAuth Error:", str(e))
+            print(traceback.format_exc())
+            
+            return Response(
+                {'error': f'Authentication failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class GoogleLoginTokenView(APIView):
+    """
+    Verify Google ID token directly (for mobile/SPA)
+    POST /api/auth/google/verify/
+    Body: {id_token: "google_id_token"}
+    """
+    permission_classes = (AllowAny,)
+    
+    def post(self, request):
+        id_token_str = request.data.get('id_token')
+        
+        if not id_token_str:
+            return Response(
+                {'error': 'id_token is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Verify the token
+            idinfo = GoogleOAuth.verify_google_token(id_token_str)
+            
+            email = idinfo.get('email')
+            first_name = idinfo.get('given_name', '')
+            last_name = idinfo.get('family_name', '')
+            google_id = idinfo.get('sub')
+            
+            # Check if user exists
+            user = User.objects.filter(email=email).first()
+            
+            if not user:
+                # Create new user
+                username = email.split('@')[0]
+                
+                # Ensure unique username
+                base_username = username
+                counter = 1
+                while User.objects.filter(username=username).exists():
+                    username = f"{base_username}{counter}"
+                    counter += 1
+                
+                user = User.objects.create_user(
+                    username=username,
+                    email=email,
+                    first_name=first_name,
+                    last_name=last_name
+                )
+                user.set_unusable_password()
+                user.save()
+            
+            # Create or get token
+            token, created = Token.objects.get_or_create(user=user)
+            
+            # Login user
+            login(request, user)
+            
+            return Response({
+                'user': UserSerializer(user).data,
+                'token': token.key,
+                'message': 'Google login successful'
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            import traceback
+            print("Google Token Verification Error:", str(e))
+            print(traceback.format_exc())
+            
+            return Response(
+                {'error': 'Invalid Google token'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+
 class RegisterView(generics.CreateAPIView):
     """
     User registration endpoint
@@ -277,6 +444,57 @@ class AnalyzeFileView(APIView):
         uploaded_file = serializer.validated_data['file']
         platform = serializer.validated_data.get('platform', 'general')
         
+        # ---------- VIRUSTOTAL VALIDATION (PRE-CHECK) ----------
+        print("🔍 VirusTotal pre-scan started for:", uploaded_file.name)
+
+        vt_response = requests.post(
+            "https://www.virustotal.com/api/v3/files",
+            headers={
+                "x-apikey": settings.VIRUSTOTAL_API_KEY
+            },
+            files={
+                "file": (uploaded_file.name, uploaded_file.read())
+            }
+        )
+
+        print("✅ VirusTotal upload status:", vt_response.status_code)
+
+        if vt_response.status_code != 200:
+            return Response(
+                {"error": "Virus scanning service unavailable"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+
+        analysis_id = vt_response.json()["data"]["id"]
+        print("🆔 VirusTotal analysis_id:", analysis_id)
+
+        time.sleep(5)
+
+        analysis_response = requests.get(
+            f"https://www.virustotal.com/api/v3/analyses/{analysis_id}",
+            headers={
+                "x-apikey": settings.VIRUSTOTAL_API_KEY
+            }
+        )
+
+        stats = analysis_response.json()["data"]["attributes"]["stats"]
+        print("📊 VirusTotal result:", stats)
+
+        if stats.get("malicious", 0) > 0:
+            print("🚫 File blocked by VirusTotal")
+            return Response(
+                {
+                    "status": "blocked",
+                    "reason": "Malicious file detected",
+                    "scan_result": stats
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        print("✅ VirusTotal check passed, continuing main logic")
+
+        # ---------- END VIRUSTOTAL PRE-CHECK ----------
+
         file_analysis = None
         temp_file = None
         
