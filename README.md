@@ -81,10 +81,6 @@ This tool empowers users to analyze, remove metadata from their files, and encry
 - Secure confidential business documents
 
 
-## 📄 License
-
-[Your License Here]
-
 ## ⚠️ Disclaimer
 
 This tool is designed for legitimate privacy and security purposes. Users are responsible for compliance with all applicable laws and regulations regarding encryption and data processing in their jurisdiction.
