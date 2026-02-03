@@ -1,7 +1,5 @@
 # Metadata Analyzer & Encryption Tool
 
-> **📌 Final Project Version:** The complete project is available on the `FinalV1.5` branch
-
 A privacy-focused metadata analysis, removal, and encryption tool available as both a web extension and standalone application. Built with user privacy at its core - we never store your files or data.
 
 ## 🚀 Overview
