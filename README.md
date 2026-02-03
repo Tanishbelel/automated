@@ -38,7 +38,7 @@ This tool empowers users to analyze, remove metadata from their files, and encry
 ## 📦 Installation
 
 ### Web Extension
-1. Download the extension from the `FinalV1.5` branch
+1. Download the extension from the branch
 2. Load the unpacked extension in your browser:
    - **Chrome/Edge:** Navigate to `chrome://extensions/` → Enable "Developer mode" → Click "Load unpacked"
    - **Firefox:** Navigate to `about:debugging` → Click "Load Temporary Add-on"
@@ -80,15 +80,6 @@ This tool empowers users to analyze, remove metadata from their files, and encry
 - Protect privacy when sharing photos and documents
 - Secure confidential business documents
 
-## 🤝 Contributing
-
-We welcome contributions! Please check the `FinalV1.5` branch for the latest codebase.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request to the `FinalV1.5` branch
 
 ## 📄 License
 
