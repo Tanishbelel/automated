@@ -9,6 +9,7 @@ let authToken = null;
 let currentUser = null;
 let currentMode = 'analyze'; // 'analyze' or 'pipeline'
 let bulkJobId = null;
+let currentBulkJobId = null; // For secure sharing bulk jobs
 
 // ===== DOM Elements =====
 const elements = {
@@ -62,15 +63,31 @@ const elements = {
     riskScore: document.getElementById('riskScore'),
     metadataList: document.getElementById('metadataList'),
     cleanBtn: document.getElementById('cleanBtn'),
+    directDownloadBtn: document.getElementById('directDownloadBtn'),
     shareBtn: document.getElementById('shareBtn'),
-    directDownloadBtn: document.getElementById('directDownloadBtn')
+    createSecureShareBtn: document.getElementById('createSecureShareBtn'),
+    secureSharePanel: document.getElementById('secureSharePanel'),
+    ssCloseBtn: document.getElementById('ssCloseBtn'),
+    ssPassword: document.getElementById('ssPassword'),
+    ssExpiry: document.getElementById('ssExpiry'),
+    ssMaxDownloads: document.getElementById('ssMaxDownloads'),
+    ssOneTime: document.getElementById('ssOneTime'),
+    ssGenerateBtn: document.getElementById('ssGenerateBtn'),
+    ssResultBox: document.getElementById('ssResultBox'),
+    ssUrlDisplay: document.getElementById('ssUrlDisplay'),
+    ssCopyBtn: document.getElementById('ssCopyBtn'),
+    ssRevokeBtn: document.getElementById('ssRevokeBtn'),
+    ssLogsBtn: document.getElementById('ssLogsBtn'),
+    ssLogsArea: document.getElementById('ssLogsArea'),
+
+    pipelineControls: document.getElementById('pipelineControls')
 };
 
 // ===== Initialization =====
 document.addEventListener('DOMContentLoaded', () => {
     loadAuthState();
     checkServerConnection();
-    
+
     // Restore last active tab
     chrome.storage.local.get(['activeTab'], (result) => {
         if (result.activeTab) {
@@ -79,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setActiveNav('analyze');
         }
     });
-    
+
     setupEventListeners();
 });
 
@@ -87,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function setupEventListeners() {
     elements.analyzeNavBtn?.addEventListener('click', () => setActiveNav('analyze'));
     elements.pipelineNavBtn?.addEventListener('click', () => setActiveNav('pipeline'));
-    
+
     elements.dashboardNavBtn?.addEventListener('click', () => {
         if (authToken) window.location.href = 'dashboard.html';
         else showLoginSection();
@@ -112,6 +129,14 @@ function setupEventListeners() {
 
     elements.cleanBtn?.addEventListener('click', downloadCleanFile);
     elements.shareBtn?.addEventListener('click', generateShareLink);
+
+    // Secure share panel
+    elements.createSecureShareBtn?.addEventListener('click', openSecureSharePanel);
+    elements.ssCloseBtn?.addEventListener('click', closeSecureSharePanel);
+    elements.ssGenerateBtn?.addEventListener('click', generateSecureShare);
+    elements.ssCopyBtn?.addEventListener('click', copySecureShareUrl);
+    elements.ssRevokeBtn?.addEventListener('click', revokeSecureShare);
+    elements.ssLogsBtn?.addEventListener('click', toggleSecureShareLogs);
 }
 
 // ===== Navigation =====
@@ -124,11 +149,13 @@ function setActiveNav(section) {
         elements.analyzeNavBtn?.classList.add('nav-card-active');
         elements.analyzeBtn?.classList.remove('hidden');
         elements.pipelineBtn?.classList.add('hidden');
+        elements.pipelineControls?.classList.add('hidden');
     } else if (section === 'pipeline') {
         currentMode = 'pipeline';
         elements.pipelineNavBtn?.classList.add('nav-card-active');
         elements.analyzeBtn?.classList.add('hidden');
         elements.pipelineBtn?.classList.remove('hidden');
+        elements.pipelineControls?.classList.remove('hidden');
     }
     resetFileUpload();
 }
@@ -195,7 +222,7 @@ async function handleLogout() {
             method: 'POST',
             headers: { 'Authorization': `Token ${authToken}` }
         });
-    } catch (e) {}
+    } catch (e) { }
     authToken = null;
     currentUser = null;
     chrome.storage.local.remove(['authToken', 'currentUser'], () => {
@@ -215,8 +242,16 @@ function showMessage(text, type) {
 // ===== Server Connection =====
 async function checkServerConnection() {
     try {
-        const response = await fetch(`${API_BASE_URL}/health/`);
-        updateConnectionStatus(response.ok);
+        const response = await fetch(`${API_BASE_URL}/analysis/`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (response.ok || response.status === 405) {
+            updateConnectionStatus(true);
+        } else {
+            updateConnectionStatus(false);
+        }
     } catch (error) {
         updateConnectionStatus(false);
     }
@@ -254,12 +289,12 @@ function handleFileSelect(e) {
 
 function handleFiles(files) {
     if (files.length === 0) return;
-    
+
     selectedFiles = Array.from(files);
-    
+
     elements.uploadArea?.classList.add('hidden');
     elements.fileSelected?.classList.remove('hidden');
-    
+
     if (selectedFiles.length === 1) {
         elements.fileName.textContent = selectedFiles[0].name;
         elements.fileSize.textContent = formatFileSize(selectedFiles[0].size);
@@ -268,7 +303,7 @@ function handleFiles(files) {
         const totalSize = selectedFiles.reduce((acc, f) => acc + f.size, 0);
         elements.fileSize.textContent = `Total: ${formatFileSize(totalSize)}`;
     }
-    
+
     elements.analyzeBtn.disabled = selectedFiles.length === 0;
     elements.pipelineBtn.disabled = selectedFiles.length === 0;
 }
@@ -279,10 +314,10 @@ async function fetchDownload(url, filename) {
         const headers = authToken ? { 'Authorization': `Token ${authToken}` } : {};
         const response = await fetch(url, { method: 'GET', headers: headers });
         if (!response.ok) throw new Error(`Download failed: ${response.status}`);
-        
+
         const blob = await response.blob();
         console.log(`📦 Received blob: ${blob.size} bytes`);
-        
+
         const downloadUrl = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = downloadUrl;
@@ -343,10 +378,10 @@ async function analyzeFile() {
 
 async function handlePipelineExecution() {
     if (selectedFiles.length === 0 || elements.pipelineBtn.disabled) return;
-    
+
     elements.pipelineBtn.disabled = true;
     elements.analyzeBtn.disabled = true;
-    
+
     if (selectedFiles.length === 1) {
         runSinglePipeline();
     } else {
@@ -387,7 +422,7 @@ async function runBulkPipeline() {
     formData.append('encrypt', 'false');
     formData.append('apply_signature', elements.signatureToggle.checked);
     formData.append('apply_redaction', elements.redactToggle.checked);
-    
+
     try {
         const response = await fetch(`${API_BASE_URL}/pipeline/bulk/`, {
             method: 'POST',
@@ -413,12 +448,12 @@ async function pollBulkStatus(jobId) {
                 return;
             }
             const data = await response.json();
-            
+
             if (data.status === 'error') {
                 setTimeout(poll, 2000);
                 return;
             }
-            
+
             if (data.status === 'completed' || data.status === 'failed') {
                 hideLoading();
                 displayBulkResults(jobId, data);
@@ -427,10 +462,10 @@ async function pollBulkStatus(jobId) {
                 const total = data.total || 0;
                 const completed = data.completed || 0;
                 const loadingText = document.querySelector('.loading-text');
-                
+
                 // Show/Update Progress UI
                 elements.bulkProgressContainer?.classList.remove('hidden');
-                
+
                 if (data.status === 'pending') {
                     if (loadingText) loadingText.textContent = `Preparing batch...`;
                     if (elements.bulkProgressStats) elements.bulkProgressStats.textContent = `Job Queued`;
@@ -441,7 +476,7 @@ async function pollBulkStatus(jobId) {
                     if (elements.bulkProgressStats) elements.bulkProgressStats.textContent = `${completed} / ${total} files cleaned (${progress}%)`;
                     if (elements.bulkProgressBar) elements.bulkProgressBar.style.width = `${progress}%`;
                 }
-                
+
                 setTimeout(poll, 2000);
             }
         } catch (error) {
@@ -479,13 +514,25 @@ function displayResults(data) {
     hideLoading();
     analysisData = data;
     elements.resultsSection?.classList.remove('hidden');
-    elements.riskScore.querySelector('.risk-value').textContent = data.risk_score || 0;
-    
+
+    // Display risk score with color coding from user's version
+    const riskValue = elements.riskScore.querySelector('.risk-value');
+    if (riskValue) {
+        riskValue.textContent = data.risk_score || 0;
+        if (data.risk_score >= 70) {
+            riskValue.style.color = 'var(--danger)';
+        } else if (data.risk_score >= 40) {
+            riskValue.style.color = 'var(--warning)';
+        } else {
+            riskValue.style.color = 'var(--success)';
+        }
+    }
+
     if (elements.directDownloadBtn) {
         if (!data.job_id) {
             elements.directDownloadBtn.classList.remove('hidden');
             elements.directDownloadBtn.onclick = () => {
-                const downloadUrl = `${API_BASE_URL}/analyses/${data.analysis_id}/download_clean/`;
+                const downloadUrl = `${API_BASE_URL}/analyses/${data.analysis_id || data.id}/download_clean/`;
                 fetchDownload(downloadUrl, data.filename || 'cleaned_file');
             };
         } else {
@@ -495,7 +542,7 @@ function displayResults(data) {
 
     elements.metadataList.innerHTML = '';
     let displayItems = [];
-    
+
     if (currentMode === 'pipeline') {
         if (data.fields_removed) displayItems.push({ key: 'Stripped Metadata', value: data.fields_removed.join(', ') });
         if (data.pii_patterns_found) {
@@ -514,7 +561,7 @@ function displayBulkResults(jobId, data) {
     elements.resultsSection?.classList.remove('hidden');
     elements.riskScore.classList.add('hidden');
     elements.metadataList.innerHTML = `<h4 style="margin-bottom:12px; font-weight:600; color:var(--text-primary);">Batch Process Dashboard</h4>`;
-    
+
     const summaryGrid = document.createElement('div');
     summaryGrid.className = 'bulk-summary-grid';
     summaryGrid.innerHTML = `
@@ -533,20 +580,22 @@ function displayBulkResults(jobId, data) {
     `;
     elements.metadataList.appendChild(summaryGrid);
 
+    // Download ZIP Button
     const zipAction = document.createElement('div');
-    zipAction.style.marginBottom = '20px';
-    zipAction.innerHTML = `
-        <button id="downloadZipBtn" class="btn-primary" style="width:100%; background:var(--success); border:none; padding:12px; border-radius:var(--radius-md); font-weight:bold; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-            Download All Cleaned (ZIP)
-        </button>
+    zipAction.style.marginBottom = '12px';
+    const downloadZipBtn = document.createElement('button');
+    downloadZipBtn.className = 'btn-primary';
+    downloadZipBtn.style.cssText = 'width:100%; background:var(--success); border:none; padding:12px; border-radius:var(--radius-md); font-weight:bold; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;';
+    downloadZipBtn.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        Download All Cleaned (ZIP)
     `;
-    elements.metadataList.appendChild(zipAction);
-
-    document.getElementById('downloadZipBtn').onclick = () => {
+    downloadZipBtn.addEventListener('click', () => {
         const zipUrl = `${API_BASE_URL}/pipeline/bulk/download-zip/${jobId}/`;
         fetchDownload(zipUrl, `batch_results_${jobId.slice(0, 8)}.zip`);
-    };
+    });
+    zipAction.appendChild(downloadZipBtn);
+    elements.metadataList.appendChild(zipAction);
 
     const fileList = document.createElement('div');
     fileList.className = 'bulk-file-list';
@@ -560,7 +609,7 @@ function displayBulkResults(jobId, data) {
             const name = res.filename || 'Unknown File';
             let statusBadge = '';
             let actionHtml = '';
-            
+
             if (res.status === 'cleaned') {
                 statusBadge = '<span class="file-status-badge badge-success">Success</span>';
                 const dlId = `dl-${res.analysis_id}`;
@@ -588,34 +637,43 @@ function displayBulkResults(jobId, data) {
             fileList.appendChild(item);
         });
     }
-    
+
     elements.metadataList.appendChild(fileList);
     elements.directDownloadBtn?.classList.add('hidden');
 }
 
 function renderMetadataList(items) {
+    if (items.length === 0) {
+        elements.metadataList.innerHTML = '<p style="text-align:center;color:var(--text-muted);font-size:12px;">No metadata found</p>';
+        return;
+    }
+
     const INITIAL_LIMIT = 5;
     let showingAll = false;
-    
-    const render = () => {
-        const existingMsg = elements.metadataList.querySelector('.message.success');
-        elements.metadataList.innerHTML = '';
-        if (existingMsg) elements.metadataList.appendChild(existingMsg);
 
+    const render = () => {
+        elements.metadataList.innerHTML = '';
         const itemsToShow = showingAll ? items : items.slice(0, INITIAL_LIMIT);
+
         itemsToShow.forEach(item => {
             const div = document.createElement('div');
             div.className = 'metadata-item';
-            div.innerHTML = `<div class="metadata-key">${escapeHtml(item.key)}</div><div class="metadata-value">${escapeHtml(item.value)}</div>`;
+            div.innerHTML = `
+                <div class="metadata-key">${escapeHtml(item.key)}</div>
+                <div class="metadata-value">${escapeHtml(item.value)}</div>
+            `;
             elements.metadataList.appendChild(div);
         });
 
         if (items.length > INITIAL_LIMIT) {
+            const btnContainer = document.createElement('div');
+            btnContainer.style.cssText = 'text-align:center;margin-top:8px;';
             const btn = document.createElement('button');
             btn.className = 'btn-show-more';
-            btn.textContent = showingAll ? 'Show Less' : `Show More (${items.length - INITIAL_LIMIT})`;
+            btn.textContent = showingAll ? 'Show Less' : `Show More (${items.length - INITIAL_LIMIT} more)`;
             btn.onclick = () => { showingAll = !showingAll; render(); };
-            elements.metadataList.appendChild(btn);
+            btnContainer.appendChild(btn);
+            elements.metadataList.appendChild(btnContainer);
         }
     };
     render();
@@ -656,18 +714,202 @@ async function downloadCleanFile() {
     }
 }
 
+// ===== Share Link =====
 async function generateShareLink() {
     if (!analysisData) return;
-    const shareUrl = `${API_BASE_URL.replace('/api', '')}/share.html?token=${analysisData.share_token}`;
+
+    const analysisId = analysisData.analysis_id || analysisData.id;
+    const btn = elements.shareBtn;
+    const originalContent = btn.innerHTML;
+
+    btn.textContent = 'Generating...';
+    btn.disabled = true;
+
     try {
+        const response = await fetch(`${API_BASE_URL}/make-public/${analysisId}/`, {
+            method: 'POST',
+            headers: authToken ? { 'Authorization': `Token ${authToken}` } : {}
+        });
+
+        if (!response.ok) throw new Error('Failed to generate public link');
+        const data = await response.json();
+        const shareUrl = data.share_url;
+
         await navigator.clipboard.writeText(shareUrl);
-        elements.shareBtn.textContent = 'Link Copied!';
-        setTimeout(() => elements.shareBtn.textContent = 'Generate Share Link', 2000);
-    } catch (e) { 
-        if (analysisData.share_token) prompt('Copy link:', shareUrl); 
-        else alert('No share token available');
+        btn.textContent = '✓ Link Copied!';
+        setTimeout(() => {
+            btn.innerHTML = originalContent;
+            btn.disabled = false;
+        }, 2000);
+    } catch (error) {
+        console.error('Share link error:', error);
+        alert(error.message);
+        btn.innerHTML = originalContent;
+        btn.disabled = false;
     }
 }
+
+// ===== Secure Share =====
+let generatedShareToken = null;
+let logsVisible = false;
+
+function openSecureSharePanel() {
+    if (!analysisData) return;
+    
+    // Reset form & result state
+    if (elements.ssPassword) elements.ssPassword.value = '';
+    if (elements.ssExpiry) elements.ssExpiry.value = '';
+    if (elements.ssMaxDownloads) elements.ssMaxDownloads.value = '0';
+    if (elements.ssOneTime) elements.ssOneTime.checked = false;
+    if (elements.ssResultBox) elements.ssResultBox.classList.add('hidden');
+    if (elements.ssLogsArea) { elements.ssLogsArea.classList.add('hidden'); elements.ssLogsArea.innerHTML = ''; }
+    
+    logsVisible = false;
+    generatedShareToken = null;
+    elements.secureSharePanel?.classList.remove('hidden');
+    elements.secureSharePanel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeSecureSharePanel() {
+    elements.secureSharePanel?.classList.add('hidden');
+}
+
+async function generateSecureShare() {
+    if (!analysisData) return;
+
+    const analysisId = analysisData?.analysis_id || analysisData?.id;
+    if (!analysisId) { alert('No analysis ID found.'); return; }
+
+    const sharePassword = elements.ssPassword?.value.trim() || '';
+    const selectedExpiry = elements.ssExpiry?.value ? parseInt(elements.ssExpiry.value) : null;
+    const maxDownloads = parseInt(elements.ssMaxDownloads?.value || '0');
+    const oneTimeDownload = elements.ssOneTime?.checked || false;
+
+    const payload = {
+        file_analysis_id: analysisId,
+        password: sharePassword,
+        expires_in_hours: selectedExpiry,
+        max_downloads: maxDownloads,
+        one_time_download: oneTimeDownload,
+    };
+
+    const btn = elements.ssGenerateBtn;
+    btn.textContent = 'Generating…';
+    btn.disabled = true;
+
+    try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (authToken) headers['Authorization'] = `Token ${authToken}`;
+
+        const response = await fetch(`${API_BASE_URL}/secure-share/create/`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.detail || data.error || 'Failed to create secure share');
+        }
+
+        generatedShareToken = data.token;
+        const shareUrl = data.share_url;
+
+        if (elements.ssUrlDisplay) elements.ssUrlDisplay.value = shareUrl;
+        elements.ssResultBox?.classList.remove('hidden');
+
+        btn.textContent = 'Regenerate Link';
+        btn.disabled = false;
+    } catch (err) {
+        alert('Error: ' + err.message);
+        btn.textContent = 'Generate Secure Link';
+        btn.disabled = false;
+    }
+}
+
+async function copySecureShareUrl() {
+    const url = elements.ssUrlDisplay?.value;
+    if (!url) return;
+    try {
+        await navigator.clipboard.writeText(url);
+        const orig = elements.ssCopyBtn.textContent;
+        elements.ssCopyBtn.textContent = '✓ Copied!';
+        setTimeout(() => { elements.ssCopyBtn.textContent = orig; }, 2000);
+    } catch {
+        prompt('Copy this link:', url);
+    }
+}
+
+async function revokeSecureShare() {
+    if (!generatedShareToken) return;
+    if (!confirm('Are you sure you want to revoke this link? It will stop working immediately.')) return;
+
+    try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (authToken) headers['Authorization'] = `Token ${authToken}`;
+
+        const res = await fetch(`${API_BASE_URL}/secure-share/${generatedShareToken}/revoke/`, {
+            method: 'POST', headers,
+        });
+        const data = await res.json();
+        if (res.ok) {
+            alert('Share link revoked successfully.');
+            elements.ssRevokeBtn.disabled = true;
+            elements.ssRevokeBtn.textContent = '❌ Revoked';
+        } else {
+            alert('Revoke failed: ' + (data.error || 'Unknown error'));
+        }
+    } catch (e) {
+        alert('Network error: ' + e.message);
+    }
+}
+
+async function toggleSecureShareLogs() {
+    if (!generatedShareToken) return;
+
+    if (logsVisible) {
+        elements.ssLogsArea?.classList.add('hidden');
+        if (elements.ssLogsBtn) elements.ssLogsBtn.textContent = '📜 View Logs';
+        logsVisible = false;
+        return;
+    }
+
+    if (elements.ssLogsBtn) elements.ssLogsBtn.textContent = 'Loading…';
+
+    try {
+        const headers = {};
+        if (authToken) headers['Authorization'] = `Token ${authToken}`;
+
+        const res = await fetch(`${API_BASE_URL}/secure-share/${generatedShareToken}/logs/`, { headers });
+        const data = await res.json();
+
+        const logs = Array.isArray(data) ? data : (data.results || []);
+        const area = elements.ssLogsArea;
+        if (!area) return;
+
+        if (logs.length === 0) {
+            area.innerHTML = '<p class="ss-no-logs">No access logs yet.</p>';
+        } else {
+            area.innerHTML = logs.map(log => `
+                <div class="ss-log-entry ${log.success ? 'ss-log-ok' : 'ss-log-fail'}">
+                    <span class="ss-log-action">${escapeHtml(log.action)}</span>
+                    <span class="ss-log-ip">${escapeHtml(log.ip_address || 'Unknown IP')}</span>
+                    <span class="ss-log-time">${new Date(log.accessed_at).toLocaleString()}</span>
+                    ${!log.success && log.error_message ? `<span class="ss-log-err">${escapeHtml(log.error_message)}</span>` : ''}
+                </div>
+            `).join('');
+        }
+
+        area.classList.remove('hidden');
+        logsVisible = true;
+        if (elements.ssLogsBtn) elements.ssLogsBtn.textContent = '📜 Hide Logs';
+    } catch (e) {
+        if (elements.ssLogsBtn) elements.ssLogsBtn.textContent = '📜 View Logs';
+        alert('Error loading logs: ' + e.message);
+    }
+}
+
 
 function escapeHtml(text) {
     const div = document.createElement('div');

@@ -131,11 +131,14 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
-# CSRF Configuration for local development
-CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:8000',
-    'http://127.0.0.1:8000',
-]
+# CSRF Configuration for local development + ngrok tunnels
+CSRF_TRUSTED_ORIGINS = config(
+    'CSRF_TRUSTED_ORIGINS',
+    default='http://localhost:8000,http://127.0.0.1:8000',
+).split(',')
+
+# Public base URL — used to build secure share links (set to ngrok URL in production)
+PUBLIC_BASE_URL = config('PUBLIC_BASE_URL', default='http://127.0.0.1:8000')
 
 SUPPORTED_FILE_FORMATS = [
     'image/jpeg',
