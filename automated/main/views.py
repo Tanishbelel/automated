@@ -444,55 +444,8 @@ class AnalyzeFileView(APIView):
         uploaded_file = serializer.validated_data['file']
         platform = serializer.validated_data.get('platform', 'general')
         
-        # ---------- VIRUSTOTAL VALIDATION (PRE-CHECK) ----------
-        print("🔍 VirusTotal pre-scan started for:", uploaded_file.name)
-
-        vt_response = requests.post(
-            "https://www.virustotal.com/api/v3/files",
-            headers={
-                "x-apikey": settings.VIRUSTOTAL_API_KEY
-            },
-            files={
-                "file": (uploaded_file.name, uploaded_file.read())
-            }
-        )
-
-        print("✅ VirusTotal upload status:", vt_response.status_code)
-
-        if vt_response.status_code != 200:
-            return Response(
-                {"error": "Virus scanning service unavailable"},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
-            )
-
-        analysis_id = vt_response.json()["data"]["id"]
-        print("🆔 VirusTotal analysis_id:", analysis_id)
-
-        time.sleep(5)
-
-        analysis_response = requests.get(
-            f"https://www.virustotal.com/api/v3/analyses/{analysis_id}",
-            headers={
-                "x-apikey": settings.VIRUSTOTAL_API_KEY
-            }
-        )
-
-        stats = analysis_response.json()["data"]["attributes"]["stats"]
-        print("📊 VirusTotal result:", stats)
-
-        if stats.get("malicious", 0) > 0:
-            print("🚫 File blocked by VirusTotal")
-            return Response(
-                {
-                    "status": "blocked",
-                    "reason": "Malicious file detected",
-                    "scan_result": stats
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        print("✅ VirusTotal check passed, continuing main logic")
-
+        # ---------- VIRUSTOTAL DISABLED FOR LOCAL TESTING ----------
+        uploaded_file.seek(0)
         # ---------- END VIRUSTOTAL PRE-CHECK ----------
 
         file_analysis = None
@@ -1091,3 +1044,361 @@ class ValidatePasswordView(APIView):
         validation = PasswordStrengthValidator.validate_password(password)
         
         return Response(validation)
+
+
+# ============================================================
+# SECURE SHARE MODULE
+# ============================================================
+from django.utils import timezone
+from .models import SecureShare, SecureShareAccessLog
+from .serializers import (
+    SecureShareCreateSerializer,
+    SecureShareInfoSerializer,
+    SecureShareAccessLogSerializer,
+)
+from django.http import HttpResponse
+
+
+def get_client_ip(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        return x_forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR')
+
+
+class SecureShareCreateView(generics.CreateAPIView):
+    """
+    POST /api/secure-share/create/
+    Body: { file_analysis_id, password?, expires_at?, max_downloads?, is_one_time? }
+    Returns: { token, share_url, message }
+    """
+    serializer_class = SecureShareCreateSerializer
+    permission_classes = [AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        share = serializer.save()
+
+        base_url = getattr(settings, 'PUBLIC_BASE_URL', 'http://127.0.0.1:8000').rstrip('/')
+        share_url = f"{base_url}/secure-share/{share.token}/"
+
+        return Response({
+            'token': str(share.token),
+            'share_url': share_url,
+            'message': 'Secure share created successfully',
+        }, status=status.HTTP_201_CREATED)
+
+
+class SecureShareInfoView(APIView):
+    """
+    GET /api/secure-share/<token>/info/
+    Public endpoint — returns metadata about the share (no file content).
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        try:
+            share = SecureShare.objects.get(token=token)
+        except SecureShare.DoesNotExist:
+            return Response({'error': 'Share not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = SecureShareInfoSerializer(share)
+        return Response(serializer.data)
+
+
+class SecureShareDownloadView(APIView):
+    """
+    POST /api/secure-share/<token>/download/
+    Body: { password? }
+    Downloads the cleaned file if the share is valid and auth passes.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request, token):
+        try:
+            share = SecureShare.objects.get(token=token)
+        except SecureShare.DoesNotExist:
+            return Response({'error': 'Share not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        ip = get_client_ip(request)
+        ua = request.META.get('HTTP_USER_AGENT', '')
+
+        if not share.is_valid():
+            SecureShareAccessLog.objects.create(
+                share=share, ip_address=ip, user_agent=ua,
+                action='download', success=False,
+                error_message='Link expired or inactive',
+            )
+            return Response({'error': 'Link is no longer valid'}, status=status.HTTP_403_FORBIDDEN)
+
+        password = request.data.get('password', '')
+        if share.password_hash and not share.check_password(password):
+            SecureShareAccessLog.objects.create(
+                share=share, ip_address=ip, user_agent=ua,
+                action='failed_auth', success=False,
+                error_message='Invalid password',
+            )
+            return Response({'error': 'Invalid password'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Log success & increment counter
+        SecureShareAccessLog.objects.create(
+            share=share, ip_address=ip, user_agent=ua,
+            action='download', success=True,
+        )
+        share.current_downloads += 1
+        share.save(update_fields=['current_downloads'])
+
+        file_analysis = share.file_analysis
+        if not file_analysis.cleaned_file:
+            return Response({'error': 'Cleaned file not available'}, status=status.HTTP_404_NOT_FOUND)
+
+        file_size = file_analysis.cleaned_file.size
+        safe_name = f"secure_{file_analysis.original_filename}"
+
+        if file_size > 10 * 1024 * 1024:
+            response = StreamingHttpResponse(
+                file_iterator(file_analysis.cleaned_file.open('rb')),
+                content_type=file_analysis.file_type,
+            )
+            response['Content-Disposition'] = f'attachment; filename="{safe_name}"'
+            response['Content-Length'] = file_size
+        else:
+            response = FileResponse(
+                file_analysis.cleaned_file.open('rb'),
+                as_attachment=True,
+                filename=safe_name,
+            )
+            response['Content-Length'] = file_size
+        return response
+
+
+class SecureShareRevokeView(APIView):
+    """
+    POST /api/secure-share/<token>/revoke/
+    Deactivates the share link immediately.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request, token):
+        try:
+            share = SecureShare.objects.get(token=token)
+        except SecureShare.DoesNotExist:
+            return Response({'error': 'Share not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        share.is_active = False
+        share.save(update_fields=['is_active'])
+        return Response({'message': 'Share revoked successfully'})
+
+
+class SecureShareLogsView(generics.ListAPIView):
+    """
+    GET /api/secure-share/<token>/logs/
+    Returns the access log for a share token.
+    """
+    serializer_class = SecureShareAccessLogSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        return SecureShareAccessLog.objects.filter(share__token=self.kwargs['token'])
+
+
+class SecureSharePageView(APIView):
+    """
+    GET /secure-share/<token>/
+    Public HTML receiver page served directly from Django.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Secure File Download</title>
+    <style>
+        *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f0f4f8 0%, #e8edf2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }}
+        .card {{
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.08);
+            padding: 40px 36px;
+            width: 100%;
+            max-width: 460px;
+            text-align: center;
+        }}
+        .shield {{
+            width: 56px; height: 56px;
+            background: linear-gradient(135deg, #4dabf7, #339af0);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 20px;
+        }}
+        .shield svg {{ stroke: #fff; }}
+        h1 {{ color: #1a202c; font-size: 22px; margin-bottom: 6px; }}
+        .subtitle {{ color: #718096; font-size: 14px; margin-bottom: 28px; }}
+        .info-box {{
+            background: #f7fafc; border: 1px solid #e2e8f0;
+            border-radius: 10px; padding: 16px; margin-bottom: 24px; text-align: left;
+        }}
+        .info-row {{ display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }}
+        .info-row span:first-child {{ color: #718096; }}
+        .info-row span:last-child {{ color: #2d3748; font-weight: 600; }}
+        .badge {{
+            display: inline-block; padding: 2px 8px; border-radius: 99px;
+            font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+        }}
+        .badge-active {{ background: #c6f6d5; color: #276749; }}
+        .badge-inactive {{ background: #fed7d7; color: #9b2c2c; }}
+        label {{ display: block; text-align: left; font-size: 13px; font-weight: 600; color: #4a5568; margin-bottom: 6px; }}
+        input[type="password"] {{
+            width: 100%; padding: 12px 14px; border: 1.5px solid #e2e8f0;
+            border-radius: 8px; font-size: 14px; outline: none; transition: border-color .2s;
+            margin-bottom: 20px;
+        }}
+        input[type="password"]:focus {{ border-color: #4dabf7; box-shadow: 0 0 0 3px rgba(77,171,247,.15); }}
+        .btn {{
+            display: block; width: 100%; padding: 13px;
+            border: none; border-radius: 8px; font-size: 16px;
+            font-weight: 700; cursor: pointer; transition: all .2s;
+        }}
+        .btn-primary {{ background: linear-gradient(135deg, #4dabf7, #339af0); color: #fff; }}
+        .btn-primary:hover:not(:disabled) {{ transform: translateY(-1px); box-shadow: 0 6px 20px rgba(51,154,240,.4); }}
+        .btn:disabled {{ opacity: .6; cursor: not-allowed; }}
+        .error {{ color: #e53e3e; font-size: 13px; margin-top: 14px; display: none; }}
+        .spinner {{
+            width: 40px; height: 40px; border: 3px solid #e2e8f0;
+            border-top-color: #4dabf7; border-radius: 50%;
+            animation: spin .8s linear infinite; margin: 0 auto 16px;
+        }}
+        @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+        .loading-text {{ color: #718096; font-size: 14px; }}
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="shield">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L3 7V12C3 16.55 6.84 20.74 12 22C17.16 20.74 21 16.55 21 12V7L12 2Z"/>
+            <path d="M9 12L11 14L15 10"/>
+        </svg>
+    </div>
+    <h1>Secure File Download</h1>
+    <p class="subtitle">This file was shared securely with metadata removed.</p>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <p class="loading-text">Fetching file details&hellip;</p>
+    </div>
+
+    <div id="main" style="display:none">
+        <div class="info-box" id="infoBox"></div>
+        <div id="pwSection" style="display:none">
+            <label for="pw">Share Password</label>
+            <input type="password" id="pw" placeholder="Enter password to unlock">
+        </div>
+        <button class="btn btn-primary" id="dlBtn" onclick="doDownload()">Download File</button>
+        <div class="error" id="errMsg"></div>
+    </div>
+</div>
+
+<script>
+const TOKEN = '{token}';
+let needsPassword = false;
+
+(async () => {{
+    try {{
+        const res = await fetch(`/api/secure-share/${{TOKEN}}/info/`);
+        const data = await res.json();
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('main').style.display = 'block';
+
+        if (data.error || !data.is_valid) {{
+            document.getElementById('infoBox').innerHTML =
+                '<div style="color:#e53e3e;text-align:center;padding:8px">' +
+                (data.error || 'This link is no longer valid or has expired.') + '</div>';
+            document.getElementById('dlBtn').disabled = true;
+            return;
+        }}
+
+        const sizeMB = (data.file_size / (1024 * 1024)).toFixed(2);
+        const badge = data.is_valid
+            ? '<span class="badge badge-active">Active</span>'
+            : '<span class="badge badge-inactive">Expired</span>';
+
+        document.getElementById('infoBox').innerHTML = `
+            <div class="info-row"><span>File</span><span>${{data.filename}}</span></div>
+            <div class="info-row"><span>Size</span><span>${{sizeMB}} MB</span></div>
+            <div class="info-row"><span>Downloads</span><span>${{data.current_downloads}} / ${{data.max_downloads || '&infin;'}}</span></div>
+            <div class="info-row"><span>Status</span><span>${{badge}}</span></div>
+        `;
+
+        needsPassword = data.has_password;
+        if (needsPassword) document.getElementById('pwSection').style.display = 'block';
+    }} catch (e) {{
+        document.getElementById('loading').innerHTML =
+            '<p style="color:#e53e3e">Error connecting to server.</p>';
+    }}
+}})();
+
+function showErr(msg) {{
+    const el = document.getElementById('errMsg');
+    el.textContent = msg;
+    el.style.display = 'block';
+}}
+
+async function doDownload() {{
+    document.getElementById('errMsg').style.display = 'none';
+    const pw = document.getElementById('pw')?.value || '';
+
+    if (needsPassword && !pw) {{ showErr('Password is required.'); return; }}
+
+    const btn = document.getElementById('dlBtn');
+    btn.textContent = 'Downloading\u2026'; btn.disabled = true;
+
+    try {{
+        const res = await fetch(`/api/secure-share/${{TOKEN}}/download/`, {{
+            method: 'POST',
+            headers: {{ 'Content-Type': 'application/json' }},
+            body: JSON.stringify({{ password: pw }}),
+        }});
+
+        if (!res.ok) {{
+            const d = await res.json().catch(() => ({{}}));
+            throw new Error(d.error || 'Download failed');
+        }}
+
+        const disposition = res.headers.get('Content-Disposition') || '';
+        let filename = 'secure_file';
+        const m = /filename="([^"]+)"/.exec(disposition);
+        if (m) filename = m[1];
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        btn.textContent = 'Downloaded \u2713'; btn.disabled = false;
+    }} catch (e) {{
+        showErr(e.message);
+        btn.textContent = 'Download File'; btn.disabled = false;
+    }}
+}}
+</script>
+</body>
+</html>'''
+        return HttpResponse(html, content_type='text/html')

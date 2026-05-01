@@ -14,7 +14,12 @@ from .views import (
     HealthCheckView,
     ValidatePasswordView,
     RegisterView, LoginView, LogoutView, UserProfileView,
-    UpdateProfileView, ChangePasswordView, DeleteAccountView,GoogleCallbackView, GoogleLoginView
+    UpdateProfileView, ChangePasswordView, DeleteAccountView, GoogleCallbackView, GoogleLoginView,
+    SecureShareCreateView,
+    SecureShareInfoView,
+    SecureShareDownloadView,
+    SecureShareRevokeView,
+    SecureShareLogsView,
 )
 
 
@@ -44,6 +49,12 @@ urlpatterns = [
     path('encrypt/', EncryptFileView.as_view(), name='encrypt-file'),
     path('decrypt/', DecryptFileView.as_view(), name='decrypt-file'),
     path('validate-password/', ValidatePasswordView.as_view(), name='validate-password'),
-    path('api/redact/', include('redaction.urls'))
-    
+    path('api/redact/', include('redaction.urls')),
+
+    # Secure Share API routes (prefix: /api/ comes from automated/urls.py)
+    path('secure-share/create/', SecureShareCreateView.as_view(), name='secure-share-create'),
+    path('secure-share/<uuid:token>/info/', SecureShareInfoView.as_view(), name='secure-share-info'),
+    path('secure-share/<uuid:token>/download/', SecureShareDownloadView.as_view(), name='secure-share-download'),
+    path('secure-share/<uuid:token>/revoke/', SecureShareRevokeView.as_view(), name='secure-share-revoke'),
+    path('secure-share/<uuid:token>/logs/', SecureShareLogsView.as_view(), name='secure-share-logs'),
 ]

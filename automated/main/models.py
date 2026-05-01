@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.contrib.auth.hashers import make_password, check_password as _check_password
 import uuid
 import json
 
@@ -104,3 +105,78 @@ class PlatformRule(models.Model):
     
     def __str__(self):
         return f"Rules for {self.platform}"
+
+
+# ============================================================
+# SECURE SHARE MODULE
+# ============================================================
+
+class SecureShare(models.Model):
+    token = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    file_analysis = models.ForeignKey(
+        FileAnalysis, on_delete=models.CASCADE, related_name='secure_shares'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    password_hash = models.CharField(max_length=128, null=True, blank=True)
+    max_downloads = models.IntegerField(default=0)       # 0 = unlimited
+    current_downloads = models.IntegerField(default=0)
+    is_one_time = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def set_password(self, raw_password):
+        """Hash and store a password. Pass None/'' to clear."""
+        if raw_password:
+            self.password_hash = make_password(raw_password)
+        else:
+            self.password_hash = None
+
+    def check_password(self, raw_password):
+        """Return True if share has no password or password matches."""
+        if not self.password_hash:
+            return True
+        return _check_password(raw_password, self.password_hash)
+
+    def is_valid(self):
+        """Return True if the share is currently accessible."""
+        from django.utils import timezone
+        if not self.is_active:
+            return False
+        if self.expires_at and timezone.now() > self.expires_at:
+            return False
+        if self.max_downloads > 0 and self.current_downloads >= self.max_downloads:
+            return False
+        if self.is_one_time and self.current_downloads >= 1:
+            return False
+        return True
+
+    def __str__(self):
+        return f"SecureShare({self.token}) → {self.file_analysis.original_filename}"
+
+
+class SecureShareAccessLog(models.Model):
+    ACTION_CHOICES = [
+        ('view', 'View'),
+        ('download', 'Download'),
+        ('failed_auth', 'Failed Auth'),
+    ]
+
+    share = models.ForeignKey(
+        SecureShare, on_delete=models.CASCADE, related_name='access_logs'
+    )
+    accessed_at = models.DateTimeField(auto_now_add=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(null=True, blank=True)
+    action = models.CharField(max_length=50, choices=ACTION_CHOICES)
+    success = models.BooleanField(default=True)
+    error_message = models.TextField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-accessed_at']
+
+    def __str__(self):
+        return f"{self.action} on {self.share.token} at {self.accessed_at}"

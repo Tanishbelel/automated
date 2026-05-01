@@ -54,7 +54,20 @@ const elements = {
     riskScore: document.getElementById('riskScore'),
     metadataList: document.getElementById('metadataList'),
     cleanBtn: document.getElementById('cleanBtn'),
-    shareBtn: document.getElementById('shareBtn')
+    createSecureShareBtn: document.getElementById('createSecureShareBtn'),
+    secureSharePanel: document.getElementById('secureSharePanel'),
+    ssCloseBtn: document.getElementById('ssCloseBtn'),
+    ssPassword: document.getElementById('ssPassword'),
+    ssExpiry: document.getElementById('ssExpiry'),
+    ssMaxDownloads: document.getElementById('ssMaxDownloads'),
+    ssOneTime: document.getElementById('ssOneTime'),
+    ssGenerateBtn: document.getElementById('ssGenerateBtn'),
+    ssResultBox: document.getElementById('ssResultBox'),
+    ssUrlDisplay: document.getElementById('ssUrlDisplay'),
+    ssCopyBtn: document.getElementById('ssCopyBtn'),
+    ssRevokeBtn: document.getElementById('ssRevokeBtn'),
+    ssLogsBtn: document.getElementById('ssLogsBtn'),
+    ssLogsArea: document.getElementById('ssLogsArea'),
 };
 
 // ===== Initialization =====
@@ -113,7 +126,14 @@ function setupEventListeners() {
 
     // -- darsh: Results actions
     elements.cleanBtn?.addEventListener('click', downloadCleanFile);
-    elements.shareBtn?.addEventListener('click', generateShareLink);
+
+    // Secure share panel
+    elements.createSecureShareBtn?.addEventListener('click', openSecureSharePanel);
+    elements.ssCloseBtn?.addEventListener('click', closeSecureSharePanel);
+    elements.ssGenerateBtn?.addEventListener('click', generateSecureShare);
+    elements.ssCopyBtn?.addEventListener('click', copySecureShareUrl);
+    elements.ssRevokeBtn?.addEventListener('click', revokeSecureShare);
+    elements.ssLogsBtn?.addEventListener('click', toggleSecureShareLogs);
 }
 
 // ===== Navigation =====
@@ -233,7 +253,7 @@ function showMessage(text, type) {
 // ===== Server Connection =====
 async function checkServerConnection() {
     try {
-        const response = await fetch(`${API_BASE_URL}/analysis/`, {
+        const response = await fetch(`${API_BASE_URL}/health/`, {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' }
         });
@@ -482,21 +502,162 @@ async function downloadCleanFile() {
     }
 }
 
-// ===== Share Link =====
-async function generateShareLink() {
+// ===== Secure Share =====
+let generatedShareToken = null;
+let logsVisible = false;
+
+function openSecureSharePanel() {
+    if (!analysisData) return;
+    // Reset form & result state
+    if (elements.ssPassword) elements.ssPassword.value = '';
+    if (elements.ssExpiry) elements.ssExpiry.value = '';
+    if (elements.ssMaxDownloads) elements.ssMaxDownloads.value = '0';
+    if (elements.ssOneTime) elements.ssOneTime.checked = false;
+    if (elements.ssResultBox) elements.ssResultBox.classList.add('hidden');
+    if (elements.ssLogsArea) { elements.ssLogsArea.classList.add('hidden'); elements.ssLogsArea.innerHTML = ''; }
+    logsVisible = false;
+    generatedShareToken = null;
+    elements.secureSharePanel?.classList.remove('hidden');
+    elements.secureSharePanel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeSecureSharePanel() {
+    elements.secureSharePanel?.classList.add('hidden');
+}
+
+async function generateSecureShare() {
     if (!analysisData) return;
 
-    const shareUrl = `${API_BASE_URL.replace('/api', '')}/share.html?token=${analysisData.share_token}`;
+    const analysisId = analysisData.analysis_id;
+    if (!analysisId) { alert('No analysis ID found. Please analyze a file first.'); return; }
+
+    const sharePassword = elements.ssPassword?.value.trim() || '';
+    const selectedExpiry = elements.ssExpiry?.value ? parseInt(elements.ssExpiry.value) : null;
+    const maxDownloads = parseInt(elements.ssMaxDownloads?.value || '0');
+    const oneTimeDownload = elements.ssOneTime?.checked || false;
+
+    const payload = {
+        file_analysis_id: analysisData.analysis_id,
+        password: sharePassword,
+        expires_in_hours: selectedExpiry,
+        max_downloads: maxDownloads,
+        one_time_download: oneTimeDownload,
+    };
+
+    const btn = elements.ssGenerateBtn;
+    btn.textContent = 'Generating…';
+    btn.disabled = true;
 
     try {
-        await navigator.clipboard.writeText(shareUrl);
-        elements.shareBtn.textContent = 'Link Copied!';
-        setTimeout(() => {
-            elements.shareBtn.textContent = 'Generate Share Link';
-        }, 2000);
-    } catch (error) {
-        // Fallback: show alert with link
-        prompt('Copy this link:', shareUrl);
+        const headers = { 'Content-Type': 'application/json' };
+        if (authToken) headers['Authorization'] = `Token ${authToken}`;
+
+        const response = await fetch(`${API_BASE_URL}/secure-share/create/`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.detail || data.error || 'Failed to create secure share');
+        }
+
+        generatedShareToken = data.token;
+        const shareUrl = data.share_url;
+
+        if (elements.ssUrlDisplay) elements.ssUrlDisplay.value = shareUrl;
+        elements.ssResultBox?.classList.remove('hidden');
+
+        btn.textContent = 'Regenerate Link';
+        btn.disabled = false;
+    } catch (err) {
+        alert('Error: ' + err.message);
+        btn.textContent = 'Generate Secure Link';
+        btn.disabled = false;
+    }
+}
+
+async function copySecureShareUrl() {
+    const url = elements.ssUrlDisplay?.value;
+    if (!url) return;
+    try {
+        await navigator.clipboard.writeText(url);
+        const orig = elements.ssCopyBtn.textContent;
+        elements.ssCopyBtn.textContent = '✓ Copied!';
+        setTimeout(() => { elements.ssCopyBtn.textContent = orig; }, 2000);
+    } catch {
+        prompt('Copy this link:', url);
+    }
+}
+
+async function revokeSecureShare() {
+    if (!generatedShareToken) return;
+    if (!confirm('Are you sure you want to revoke this link? It will stop working immediately.')) return;
+
+    try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (authToken) headers['Authorization'] = `Token ${authToken}`;
+
+        const res = await fetch(`${API_BASE_URL}/secure-share/${generatedShareToken}/revoke/`, {
+            method: 'POST', headers,
+        });
+        const data = await res.json();
+        if (res.ok) {
+            alert('Share link revoked successfully.');
+            elements.ssRevokeBtn.disabled = true;
+            elements.ssRevokeBtn.textContent = '❌ Revoked';
+        } else {
+            alert('Revoke failed: ' + (data.error || 'Unknown error'));
+        }
+    } catch (e) {
+        alert('Network error: ' + e.message);
+    }
+}
+
+async function toggleSecureShareLogs() {
+    if (!generatedShareToken) return;
+
+    if (logsVisible) {
+        elements.ssLogsArea?.classList.add('hidden');
+        if (elements.ssLogsBtn) elements.ssLogsBtn.textContent = '📜 View Logs';
+        logsVisible = false;
+        return;
+    }
+
+    if (elements.ssLogsBtn) elements.ssLogsBtn.textContent = 'Loading…';
+
+    try {
+        const headers = {};
+        if (authToken) headers['Authorization'] = `Token ${authToken}`;
+
+        const res = await fetch(`${API_BASE_URL}/secure-share/${generatedShareToken}/logs/`, { headers });
+        const data = await res.json();
+
+        const logs = Array.isArray(data) ? data : (data.results || []);
+        const area = elements.ssLogsArea;
+        if (!area) return;
+
+        if (logs.length === 0) {
+            area.innerHTML = '<p class="ss-no-logs">No access logs yet.</p>';
+        } else {
+            area.innerHTML = logs.map(log => `
+                <div class="ss-log-entry ${log.success ? 'ss-log-ok' : 'ss-log-fail'}">
+                    <span class="ss-log-action">${escapeHtml(log.action)}</span>
+                    <span class="ss-log-ip">${escapeHtml(log.ip_address || 'Unknown IP')}</span>
+                    <span class="ss-log-time">${new Date(log.accessed_at).toLocaleString()}</span>
+                    ${!log.success && log.error_message ? `<span class="ss-log-err">${escapeHtml(log.error_message)}</span>` : ''}
+                </div>
+            `).join('');
+        }
+
+        area.classList.remove('hidden');
+        logsVisible = true;
+        if (elements.ssLogsBtn) elements.ssLogsBtn.textContent = '📜 Hide Logs';
+    } catch (e) {
+        if (elements.ssLogsBtn) elements.ssLogsBtn.textContent = '📜 View Logs';
+        alert('Error loading logs: ' + e.message);
     }
 }
 
