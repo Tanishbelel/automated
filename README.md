@@ -1,92 +1,111 @@
-# Metadata Analyzer & Encryption Tool
+# Project Setup Guide (Readme2)
 
-A privacy-focused metadata analysis, removal, and encryption tool available as both a web extension and standalone application. Built with user privacy at its core - we never store your files or data.
+This guide provides step-by-step instructions to set up and run the automated metadata extraction and cleaning project.
 
-## 🚀 Overview
+## 📋 Prerequisites
 
-This tool empowers users to analyze, remove metadata from their files, and encrypt/decrypt sensitive documents with military-grade AES-256 encryption. Unlike other solutions, we act purely as a mediator - your files are processed locally and never stored on our servers.
-
-## ✨ Key Features
-
-### 🔍 Metadata Analysis & Removal
-- Comprehensive metadata detection and analysis
-- One-click metadata removal from documents, images, and other file types
-- Detailed reports showing what metadata was found and removed
-- Support for multiple file formats (PDF, DOCX, JPEG, PNG, and more)
-
-### 🔐 AES-256 Encryption/Decryption
-- Military-grade AES-256 encryption for maximum security
-- Secure file encryption and decryption
-- Password-protected encryption with strong key derivation
-- No backdoors or key escrow - only you have access to your encrypted files
-
-### 🛡️ Privacy-First Architecture
-**Our Core USP: Zero Data Storage**
-- ✅ All processing happens locally on your device
-- ✅ Files are never uploaded to our servers
-- ✅ We act only as a mediator for processing
-- ✅ Your data remains 100% under your control
-- ✅ No user files, metadata, or content is ever stored
-
-### 👤 Personal User Dashboard
-- Track your file processing history (stored locally)
-- View statistics on metadata removed
-- Manage encryption keys and settings
-- Customizable privacy preferences
-- Activity logs (local only)
-
-## 📦 Installation
-
-### Web Extension
-1. Download the extension from the branch
-2. Load the unpacked extension in your browser:
-   - **Chrome/Edge:** Navigate to `chrome://extensions/` → Enable "Developer mode" → Click "Load unpacked"
-   - **Firefox:** Navigate to `about:debugging` → Click "Load Temporary Add-on"
-3. Select the extension folder
-
-   git clone <repository-url>
-   cd <project-directory>
-   ```
-
-
-## 🎯 How It Works
-
-1. **Select Your File:** Choose the file you want to process
-2. **Choose Action:** Metadata analysis/removal or encryption/decryption
-3. **Local Processing:** All operations happen on your device
-4. **Download Result:** Get your processed file immediately
-5. **Auto-Cleanup:** Original file data is cleared from memory
-
-## 🔒 Security Features
-
-- **AES-256 Encryption:** Industry-standard encryption algorithm
-- **Local Processing:** No data leaves your device
-- **Memory Cleanup:** Automatic clearing of file data after processing
-- **Secure Key Management:** Keys never transmitted or stored
-- **Open Source:** Transparent codebase for security audits
-
-## 💻 Technology Stack
-
-- Frontend: HTML, CSS, JavaScript
-- Encryption: AES-256 (Web Crypto API)
-- Metadata Processing: Custom parsers and libraries
-- Storage: Local browser storage (user preferences only)
-
-## 🌟 Use Cases
-
-- Remove tracking metadata from documents before sharing
-- Encrypt sensitive files for secure storage or transmission
-- Analyze what information your files contain
-- Protect privacy when sharing photos and documents
-- Secure confidential business documents
-
-
-## ⚠️ Disclaimer
-
-This tool is designed for legitimate privacy and security purposes. Users are responsible for compliance with all applicable laws and regulations regarding encryption and data processing in their jurisdiction.
-
-
+Before starting, ensure you have the following installed:
+- **Python 3.13+**
+- **Redis Server** (Required for background tasks, caching, and Celery broker)
+- **Tesseract OCR Engine** (Required for metadata extraction and redaction)
+  - **Mac:** `brew install tesseract`
+  - **Linux:** `sudo apt install tesseract-ocr`
+  - **Windows:** Download installer from [UB Mannheim](https://github.com/UB-Mannheim/tesseract/wiki) and add to PATH.
+- **Google Chrome** (For the extension)
 
 ---
 
-**Remember:** Your privacy is our priority. We never see, store, or have access to your files. You are in complete control.
+## 🚀 Backend Setup (Django & Celery)
+
+1. **Navigate to the Project Root:**
+   ```bash
+   cd "mini proj/automated"
+   ```
+
+2. **Create and Activate Virtual Environment:**
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+
+3. **Install Dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Environment Variables (CRITICAL for Mac):**
+   Set the following variables in your terminal session or `.env` file:
+   ```bash
+   export PYTHONPATH=$PYTHONPATH:.
+   export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+   ```
+
+5. **Run Migrations:**
+   ```bash
+   python manage.py migrate
+   ```
+
+6. **Start Redis Server:**
+   Ensure Redis is running in a separate terminal:
+   ```bash
+   redis-server
+   ```
+
+7. **Start Celery Worker:**
+   Open a NEW terminal, activate `venv`, set environment variables, and run:
+   ```bash
+   celery -A pipeline.bulk_queue worker --loglevel=info
+   ```
+
+8. **Start Django Development Server:**
+   ```bash
+   python manage.py runserver
+   ```
+   The API will be available at `http://127.0.0.1:8000/api/`.
+
+---
+
+## 🌐 Frontend Setup (Chrome Extension)
+
+1. Open **Google Chrome**.
+2. Navigate to `chrome://extensions/`.
+3. Enable **"Developer mode"** (toggle in the top right corner).
+4. Click **"Load unpacked"**.
+5. Select the `extension` folder inside the project directory (`mini proj/automated/extension`).
+6. The extension icon should now appear in your browser toolbar.
+
+---
+
+## 🛠️ Key Features & Usage
+
+### 🔍 Single File Analysis
+- Open the extension popup.
+- Select a file (Images, PDFs, etc.).
+- Click **"Analyze"** to see extracted metadata and risk scores.
+- Click **"Clean Metadata"** to generate a sanitized version.
+- Use **"Secure Share"** to generate a password-protected link.
+
+### 📦 Bulk Pipeline
+- Select multiple files in the extension.
+- Click **"Start Pipeline"**.
+- The system will process files in batches using Celery.
+- Download the final results as a single **ZIP archive**.
+
+---
+
+## ⚠️ Troubleshooting
+
+- **Celery Tasks Not Running:** Ensure `redis-server` is active and the Celery worker is running in a separate terminal.
+- **Tesseract Not Found:** Verify `tesseract --version` in your terminal. If installed in a non-standard path, update `detector.py`.
+- **CORS Issues:** The backend is configured to allow `chrome-extension://` origins. 
+- **Import Errors:** Always ensure `PYTHONPATH` includes the current directory.
+- **Mac Fork Error:** If you see a crash related to `fork()`, ensure `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` is set.
+
+---
+
+## 📂 Project Structure
+- `main/`: Core Django app logic, models, and views.
+- `extension/`: Chrome extension source code (HTML/JS/CSS).
+- `pipeline/`: Bulk processing logic and Celery tasks (`bulk_queue.py`).
+- `redaction/`: AI-powered metadata detection and removal using OpenCV and Tesseract.
+- `automated/`: Project settings and URL configurations.

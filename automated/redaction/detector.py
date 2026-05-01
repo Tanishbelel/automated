@@ -25,7 +25,7 @@ import cv2
 import pytesseract
 from PIL import Image
 
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+# pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,8 @@ _DOB_RE = re.compile(
 _LABEL_NAME       = re.compile(r"\bname\b",              re.IGNORECASE)
 _LABEL_FATHER     = re.compile(r"\bfather",              re.IGNORECASE)
 _LABEL_DOB        = re.compile(r"\b(date\s+of\s+birth|dob|birth)\b", re.IGNORECASE)
+_LABEL_PAN_HDR    = re.compile(r"permanent\s+account\s+number", re.IGNORECASE)
+
 _LABEL_PAN_HDR    = re.compile(r"permanent\s+account\s+number", re.IGNORECASE)
 
 

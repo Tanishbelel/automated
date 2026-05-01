@@ -15,6 +15,7 @@ from .views import (
     ValidatePasswordView,
     RegisterView, LoginView, LogoutView, UserProfileView,
     UpdateProfileView, ChangePasswordView, DeleteAccountView, GoogleCallbackView, GoogleLoginView,
+    PipelineProcessView, BulkPipelineView, BulkJobStatusView, BulkZipDownloadView,
     SecureShareCreateView,
     SecureShareInfoView,
     SecureShareDownloadView,
@@ -49,9 +50,14 @@ urlpatterns = [
     path('encrypt/', EncryptFileView.as_view(), name='encrypt-file'),
     path('decrypt/', DecryptFileView.as_view(), name='decrypt-file'),
     path('validate-password/', ValidatePasswordView.as_view(), name='validate-password'),
+    
+    path('pipeline/', PipelineProcessView.as_view(), name='pipeline-process'),
+    path('pipeline/bulk/', BulkPipelineView.as_view(), name='pipeline-bulk'),
+    path('pipeline/bulk/status/<str:job_id>/', BulkJobStatusView.as_view(), name='pipeline-bulk-status'),
+    path('pipeline/bulk/download-zip/<str:job_id>/', BulkZipDownloadView.as_view(), name='pipeline-bulk-zip'),
     path('api/redact/', include('redaction.urls')),
 
-    # Secure Share API routes (prefix: /api/ comes from automated/urls.py)
+    # Secure Share API routes
     path('secure-share/create/', SecureShareCreateView.as_view(), name='secure-share-create'),
     path('secure-share/<uuid:token>/info/', SecureShareInfoView.as_view(), name='secure-share-info'),
     path('secure-share/<uuid:token>/download/', SecureShareDownloadView.as_view(), name='secure-share-download'),

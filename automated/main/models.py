@@ -30,10 +30,12 @@ class FileAnalysis(models.Model):
     file_size = models.BigIntegerField()
     platform = models.CharField(max_length=50, choices=PLATFORM_CHOICES, default='general')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    job_id = models.CharField(max_length=255, null=True, blank=True, db_index=True)
     risk_score = models.IntegerField(default=0)
     metadata_count = models.IntegerField(default=0)
     share_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     is_public = models.BooleanField(default=False)
+    share_expiry = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
