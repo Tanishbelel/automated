@@ -15,11 +15,9 @@
         <header class="hero">
             <div class="hero-content">
                 <div class="logo-icon">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 2L3 7V12C3 16.55 6.84 20.74 12 22C17.16 20.74 21 16.55 21 12V7L12 2Z"
-                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                        <path d="M9 12L11 14L15 10" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                            stroke-linejoin="round" />
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                     </svg>
                 </div>
                 <h1 class="hero-title">Protect your file privacy</h1>
@@ -87,13 +85,22 @@
 
             <button class="nav-card" id="redactNavBtn">
                 <svg class="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <rect x="3" y="8" width="18" height="4" rx="1" stroke="currentColor" stroke-width="2" fill="currentColor" fill-opacity="0.15"/>
-                    <path d="M3 8H21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    <path d="M3 12H21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    <path d="M5 5H10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                    <path d="M5 16H19M5 19H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    <rect x="3" y="8" width="18" height="4" rx="1" stroke="currentColor" stroke-width="2"
+                        fill="currentColor" fill-opacity="0.15" />
+                    <path d="M3 8H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    <path d="M3 12H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    <path d="M5 5H10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                    <path d="M5 16H19M5 19H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
                 </svg>
                 <span class="nav-label">Redact Files</span>
+            </button>
+
+            <button class="nav-card" id="pipelineNavBtn">
+                <svg class="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 2L15 8L22 9L17 14L18.5 21L12 17.5L5.5 21L7 14L2 9L9 8L12 2Z" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <span class="nav-label">Smart Pipeline</span>
             </button>
         </nav>
 
@@ -141,9 +148,11 @@
                         <path d="M12 5V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
                     </svg>
                     <p class="upload-text"><strong>Click to upload</strong> or drag and drop</p>
-                    <p class="upload-hint">JPEG, PNG, GIF, WebP, PDF</p>
+                    <p class="upload-hint">JPEG, PNG, GIF, WebP, PDF (Multiple allowed for Pipeline)</p>
+
                 </div>
-                <input type="file" id="fileInput" accept="image/*,.pdf" hidden>
+                <input type="file" id="fileInput" accept="image/*,.pdf" multiple hidden>
+
 
                 <div id="fileSelected" class="file-selected hidden">
                     <div class="file-info">
@@ -176,15 +185,44 @@
                     </select>
                     <button class="btn-analyze" id="analyzeBtn" disabled>Analyze File</button>
                 </div>
+                <div class="signature-control-card">
+                    <span class="signature-label">Apply Machine Signature</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="signatureToggle" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="signature-control-card" style="margin-top:0;">
+                    <span class="signature-label">Redact Sensitive Data (PII)</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="redactToggle" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="form-row">
+                    <button class="btn-pipeline hidden" id="pipelineBtn" disabled>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                        </svg>
+                        <span>Run Smart Pipeline</span>
+                    </button>
+                </div>
             </section>
 
             <!-- Loading State -->
-            <div id="loadingSection" class="loading-section hidden">
-                <div class="spinner"></div>
-                <p class="loading-text">Analyzing metadata...</p>
+            <div id="loadingSection" class="section hidden">
+            <div class="loading-content">
+                <div class="spinner-premium"></div>
+                <div class="loading-text">Analyzing file...</div>
+                <div id="bulkProgressContainer" class="bulk-progress-container hidden">
+                    <div class="bulk-progress-track">
+                        <div id="bulkProgressBar" class="bulk-progress-fill"></div>
+                    </div>
+                    <div id="bulkProgressStats" class="bulk-progress-stats">0/0 files cleaned</div>
+                </div>
             </div>
-
-            <!-- Results Section -->
+        </div>
+     <!-- Results Section -->
             <div id="resultsSection" class="results-section hidden">
                 <div class="results-header">
                     <h3 class="results-title">Analysis Complete</h3>
@@ -198,9 +236,11 @@
                     <!-- Metadata items will be populated by JS -->
                 </div>
 
-                <div class="results-actions">
-                    <button class="btn-clean" id="cleanBtn">Clean & Download</button>
-                    <button class="btn-share" id="shareBtn">Generate Share Link</button>
+                <div class="results-actions" id="resultsActions">
+                    <button class="btn-download-primary" id="directDownloadBtn" style="background:#22c55e; color:white; font-weight:bold; padding:12px; border-radius:8px; display:flex; align-items:center; justify-content:center; gap:8px; width:100%; margin-top:10px; border:none; cursor:pointer;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                        Download Cleaned File
+                    </button>
                 </div>
             </div>
         </main>

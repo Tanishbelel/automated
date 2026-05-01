@@ -14,7 +14,8 @@ from .views import (
     HealthCheckView,
     ValidatePasswordView,
     RegisterView, LoginView, LogoutView, UserProfileView,
-    UpdateProfileView, ChangePasswordView, DeleteAccountView,GoogleCallbackView, GoogleLoginView
+    UpdateProfileView, ChangePasswordView, DeleteAccountView,GoogleCallbackView, GoogleLoginView,
+    PipelineProcessView, BulkPipelineView, BulkJobStatusView, BulkZipDownloadView
 )
 
 
@@ -44,6 +45,10 @@ urlpatterns = [
     path('encrypt/', EncryptFileView.as_view(), name='encrypt-file'),
     path('decrypt/', DecryptFileView.as_view(), name='decrypt-file'),
     path('validate-password/', ValidatePasswordView.as_view(), name='validate-password'),
+    path('pipeline/', PipelineProcessView.as_view(), name='pipeline-process'),
+    path('pipeline/bulk/', BulkPipelineView.as_view(), name='pipeline-bulk'),
+    path('pipeline/bulk/status/<str:job_id>/', BulkJobStatusView.as_view(), name='pipeline-bulk-status'),
+    path('pipeline/bulk/download-zip/<str:job_id>/', BulkZipDownloadView.as_view(), name='pipeline-bulk-zip'),
     path('api/redact/', include('redaction.urls'))
     
 ]

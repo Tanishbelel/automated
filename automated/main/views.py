@@ -432,6 +432,26 @@ class FileAnalysisViewSet(viewsets.ModelViewSet):
             content_type='image/png'
         )
 
+    @action(detail=True, methods=['post'])
+    def secure_share(self, request, pk=None):
+        file_analysis = self.get_object()
+        duration_hours = int(request.data.get('duration_hours', 24))
+        
+        from django.utils import timezone
+        import datetime
+        
+        file_analysis.is_public = True
+        file_analysis.share_expiry = timezone.now() + datetime.timedelta(hours=duration_hours)
+        file_analysis.save()
+        
+        share_url = request.build_absolute_uri(f'/api/share/{file_analysis.share_token}/')
+        
+        return Response({
+            'share_url': share_url,
+            'expiry': file_analysis.share_expiry,
+            'message': f'Secure link generated, expires in {duration_hours} hours'
+        })
+
 
 class AnalyzeFileView(APIView):
     
@@ -445,28 +465,29 @@ class AnalyzeFileView(APIView):
         platform = serializer.validated_data.get('platform', 'general')
         
         # ---------- VIRUSTOTAL VALIDATION (PRE-CHECK) ----------
-        print("🔍 VirusTotal pre-scan started for:", uploaded_file.name)
+        if getattr(settings, 'VIRUSTOTAL_API_KEY', ''):
+            print("🔍 VirusTotal pre-scan started for:", uploaded_file.name)
 
-        vt_response = requests.post(
-            "https://www.virustotal.com/api/v3/files",
-            headers={
-                "x-apikey": settings.VIRUSTOTAL_API_KEY
-            },
-            files={
-                "file": (uploaded_file.name, uploaded_file.read())
-            }
-        )
-
-        print("✅ VirusTotal upload status:", vt_response.status_code)
-
-        if vt_response.status_code != 200:
-            return Response(
-                {"error": "Virus scanning service unavailable"},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            vt_response = requests.post(
+                "https://www.virustotal.com/api/v3/files",
+                headers={
+                    "x-apikey": settings.VIRUSTOTAL_API_KEY
+                },
+                files={
+                    "file": (uploaded_file.name, uploaded_file.read())
+                }
             )
 
-        analysis_id = vt_response.json()["data"]["id"]
-        print("🆔 VirusTotal analysis_id:", analysis_id)
+            print("✅ VirusTotal upload status:", vt_response.status_code)
+
+            if vt_response.status_code != 200:
+                return Response(
+                    {"error": "Virus scanning service unavailable"},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
+
+            analysis_id = vt_response.json()["data"]["id"]
+            print("🆔 VirusTotal analysis_id:", analysis_id)
 
         time.sleep(5)
 
@@ -575,6 +596,50 @@ class AnalyzeFileView(APIView):
                     uploaded_file.name
                 )
             
+            # 3. Redact PII for images and PDFs
+            mime = uploaded_file.content_type or ''
+            from redaction.utils import is_image_mime, is_pdf_mime
+            
+            if is_image_mime(mime) or is_pdf_mime(mime):
+                from redaction.detector import detect_sensitive_regions
+                from redaction.redactor import redact_image
+                from redaction.utils import pdf_to_images, images_to_pdf_bytes, image_to_png_bytes
+                from PIL import Image
+                import io
+                from django.core.files.base import ContentFile
+                
+                try:
+                    # Load the already metadata-stripped content
+                    if hasattr(cleaned, 'read'):
+                        cleaned.seek(0)
+                        img_data = cleaned.read()
+                    else:
+                        img_data = cleaned
+                    
+                    if is_pdf_mime(mime):
+                        print(f"📄 View: Redacting PDF {uploaded_file.name}...")
+                        pages = pdf_to_images(img_data)
+                        redacted_pages = []
+                        for page_img in pages:
+                            dets = detect_sensitive_regions(page_img)
+                            redacted_pages.append(redact_image(page_img, dets))
+                        out_bytes = images_to_pdf_bytes(redacted_pages)
+                        cleaned = ContentFile(out_bytes)
+                    else:
+                        image = Image.open(io.BytesIO(img_data))
+                        print(f"🖼️ View: Redacting Image {uploaded_file.name}...")
+                        detections = detect_sensitive_regions(image)
+                        if detections:
+                            redacted_image = redact_image(image, detections)
+                            out_bytes = image_to_png_bytes(redacted_image)
+                            cleaned = ContentFile(out_bytes)
+                            print(f"✅ View: Redaction applied.")
+                except Exception as e:
+                    print(f"⚠️ View: Redaction error: {str(e)}")
+
+            if hasattr(cleaned, 'seek'):
+                cleaned.seek(0)
+            
             # Save cleaned file
             filename_parts = uploaded_file.name.rsplit('.', 1)
             if len(filename_parts) == 2:
@@ -582,10 +647,8 @@ class AnalyzeFileView(APIView):
             else:
                 clean_name = f"{uploaded_file.name}_clean"
             
-            if hasattr(cleaned, 'seek'):
-                cleaned.seek(0)
-            
             file_analysis.cleaned_file.save(clean_name, cleaned, save=False)
+
             file_analysis.metadata_count = len(metadata_entries)
             file_analysis.risk_score = risk_score
             file_analysis.status = 'cleaned'
@@ -716,6 +779,38 @@ class CleanAndDownloadView(APIView):
                     uploaded_file.name
                 )
             
+            # Redact PII for images and PDFs
+            mime = uploaded_file.content_type or ''
+            from redaction.utils import is_image_mime, is_pdf_mime
+            
+            if is_image_mime(mime) or is_pdf_mime(mime):
+                from redaction.detector import detect_sensitive_regions
+                from redaction.redactor import redact_image
+                from redaction.utils import pdf_to_images, images_to_pdf_bytes, image_to_png_bytes
+                from PIL import Image
+                import io
+                from django.core.files.base import ContentFile
+                
+                try:
+                    if hasattr(cleaned_file, 'read'):
+                        cleaned_file.seek(0)
+                        img_data = cleaned_file.read()
+                    else:
+                        img_data = cleaned_file
+                        
+                    if is_pdf_mime(mime):
+                        pages = pdf_to_images(img_data)
+                        redacted_pages = [redact_image(p, detect_sensitive_regions(p)) for p in pages]
+                        cleaned_file = ContentFile(images_to_pdf_bytes(redacted_pages))
+                    else:
+                        image = Image.open(io.BytesIO(img_data))
+                        detections = detect_sensitive_regions(image)
+                        if detections:
+                            redacted_image = redact_image(image, detections)
+                            cleaned_file = ContentFile(image_to_png_bytes(redacted_image))
+                except Exception:
+                    pass
+
             # Generate clean filename
             filename_parts = uploaded_file.name.rsplit('.', 1)
             if len(filename_parts) == 2:
@@ -768,18 +863,29 @@ class CleanAndDownloadView(APIView):
 
 
 class ShareFileView(APIView):
+    permission_classes = (AllowAny,)
     
     def get(self, request, share_token):
+        from django.utils import timezone
         try:
-            file_analysis = FileAnalysis.objects.get(share_token=share_token)
-        except FileAnalysis.DoesNotExist:
-            return Response(
-                {'error': 'File not found or link expired'},
-                status=status.HTTP_404_NOT_FOUND
+            file_analysis = FileAnalysis.objects.get(share_token=share_token, is_public=True)
+            
+            # Expiry Check
+            if file_analysis.share_expiry and file_analysis.share_expiry < timezone.now():
+                return Response({'error': 'Secure link has expired'}, status=status.HTTP_403_FORBIDDEN)
+                
+            if not file_analysis.cleaned_file:
+                return Response({'error': 'Cleaned file not available'}, status=status.HTTP_404_NOT_FOUND)
+                
+            response = FileResponse(
+                file_analysis.cleaned_file.open('rb'),
+                as_attachment=True,
+                filename=f"shared_{file_analysis.original_filename}"
             )
-        
-        serializer = FileAnalysisSerializer(file_analysis, context={'request': request})
-        return Response(serializer.data)
+            return response
+            
+        except FileAnalysis.DoesNotExist:
+            return Response({'error': 'File not found or private'}, status=status.HTTP_404_NOT_FOUND)
     
     def post(self, request, share_token):
         try:
@@ -1091,3 +1197,196 @@ class ValidatePasswordView(APIView):
         validation = PasswordStrengthValidator.validate_password(password)
         
         return Response(validation)
+
+
+class PipelineProcessView(APIView):
+    """
+    Unified metadata removal and PII redaction pipeline.
+    """
+    def post(self, request):
+        from pipeline.orchestrator import PipelineOrchestrator
+        from main.serializers import FileUploadSerializer
+        import tempfile
+        import os
+        from rest_framework import status
+        
+        serializer = FileUploadSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+        uploaded_file = serializer.validated_data['file']
+        platform = serializer.validated_data.get('platform', 'general')
+        apply_signature = request.data.get('apply_signature') == 'true'
+        apply_redaction = request.data.get('apply_redaction') == 'true'
+        
+        # 1. Save uploaded file to a temporary location
+        suffix = os.path.splitext(uploaded_file.name)[1]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            for chunk in uploaded_file.chunks():
+                tmp.write(chunk)
+            tmp_path = tmp.name
+            
+        try:
+            # 2. Run the Orchestrator
+            orchestrator = PipelineOrchestrator()
+            pipeline_result = orchestrator.run(
+                file_path=tmp_path,
+                platform=platform,
+                user_id=request.user.id if request.user.is_authenticated else None,
+                apply_signature=apply_signature,
+                apply_redaction=apply_redaction
+            )
+
+            # 3. Save to FileAnalysis so it can be downloaded/referenced
+            from .models import FileAnalysis
+            import os
+            file_analysis = FileAnalysis.objects.create(
+                user=request.user if request.user.is_authenticated else None,
+                original_filename=uploaded_file.name,
+                file_type=uploaded_file.content_type or 'application/octet-stream',
+                file_size=os.path.getsize(pipeline_result.output_file_path),
+                platform=platform,
+                risk_score=pipeline_result.risk_score,
+                status='cleaned'
+            )
+            
+            # Save the processed file to both original and cleaned fields
+            with open(pipeline_result.output_file_path, 'rb') as f:
+                content = f.read()
+                f_name = f"pipeline_{uploaded_file.name}"
+                
+                # Use ContentFile to save multiple times if needed, or just reopen
+                from django.core.files.base import ContentFile
+                file_analysis.original_file.save(f_name, ContentFile(content), save=False)
+                file_analysis.cleaned_file.save(f_name, ContentFile(content), save=True)
+
+            
+            # Return combined data
+            response_data = pipeline_result.dict()
+            response_data['analysis_id'] = file_analysis.id
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            import traceback
+            print(f"❌ Pipeline Error: {str(e)}")
+            print(traceback.format_exc())
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        finally:
+            # Clean up temp file
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+
+class BulkPipelineView(APIView):
+    """
+    Asynchronous bulk file processing using Celery.
+    """
+    def post(self, request):
+        from pipeline.bulk_queue import submit_bulk
+        from rest_framework import status
+        import tempfile
+        import os
+        
+        files = request.FILES.getlist('files')
+        platform = request.data.get('platform', 'general')
+        encrypt = request.data.get('encrypt', 'false').lower() == 'true'
+        apply_signature = request.data.get('apply_signature') == 'true'
+        apply_redaction = request.data.get('apply_redaction') == 'true'
+        password = request.data.get('password', None)
+        
+        if not files:
+            return Response({"error": "No files provided"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        files_data = []
+        # Ensure project-level temp directory exists
+        bulk_temp = os.path.join(settings.BASE_DIR, 'bulk_temp')
+        os.makedirs(bulk_temp, exist_ok=True)
+
+        for i, uploaded_file in enumerate(files):
+            # Create a truly unique filename using index and timestamp
+            unique_name = f"{int(time.time())}_{i}_{uploaded_file.name}"
+            tmp_path = os.path.join(bulk_temp, unique_name)
+            
+            with open(tmp_path, 'wb+') as tmp:
+                for chunk in uploaded_file.chunks():
+                    tmp.write(chunk)
+            
+            files_data.append((tmp_path, uploaded_file.name))
+        
+        try:
+            user_id = request.user.id if request.user.is_authenticated else None
+            job_id = submit_bulk(files_data, platform, encrypt, password, user_id, apply_signature=apply_signature, apply_redaction=apply_redaction)
+            print(f"🚀 Bulk Job Submitted: {job_id} ({len(files)} files)")
+            return Response({
+                "message": f"Bulk job submitted successfully: {len(files)} files",
+                "job_id": job_id,
+                "status": "processing"
+            }, status=status.HTTP_202_ACCEPTED)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class BulkZipDownloadView(APIView):
+    """
+    Download all files in a bulk job as a single ZIP file.
+    """
+    def get(self, request, job_id):
+        from .models import FileAnalysis
+        import zipfile
+        import io
+        from django.utils import timezone
+        import datetime
+        
+        print(f"📦 Generating ZIP for Job ID: {job_id}")
+        
+        # 1. Try to find by Job ID
+        records = FileAnalysis.objects.filter(job_id=job_id, status='cleaned')
+        
+        # 2. Fallback: If no job_id found, get recent files for this user (if logged in)
+        if not records.exists() and request.user.is_authenticated:
+            print("⚠️ No records found by Job ID, trying fallback to recent files...")
+            records = FileAnalysis.objects.filter(
+                user=request.user, 
+                status='cleaned',
+                created_at__gte=timezone.now() - datetime.timedelta(minutes=10)
+            )[:10]
+            
+        if not records.exists():
+            print("❌ No files found to ZIP!")
+            return Response({"error": "No cleaned files found for this job"}, status=status.HTTP_404_NOT_FOUND)
+            
+        # Create ZIP in memory
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for file_obj in records:
+                if file_obj.cleaned_file:
+                    try:
+                        # Use absolute path to ensure we can read it
+                        path = file_obj.cleaned_file.path
+                        with open(path, 'rb') as f:
+                            content = f.read()
+                            if content:
+                                arc_name = f"clean_{file_obj.original_filename}"
+                                zip_file.writestr(arc_name, content)
+                                print(f"✅ Added to ZIP: {arc_name}")
+                    except Exception as e:
+                        print(f"⚠️ Failed to add {file_obj.id}: {e}")
+        
+        zip_buffer.seek(0)
+        response = FileResponse(
+            zip_buffer,
+            as_attachment=True,
+            filename=f"bulk_processed_{job_id[:8] if job_id else 'batch'}.zip"
+        )
+        response['Content-Type'] = 'application/zip'
+        return response
+
+class BulkJobStatusView(APIView):
+    """
+    Check the status of a bulk processing job.
+    """
+    def get(self, request, job_id):
+        from pipeline.bulk_queue import get_bulk_status
+        print(f"📡 API Request: Bulk Status for {job_id}")
+        status_data = get_bulk_status(job_id)
+        return Response(status_data)

@@ -9,8 +9,7 @@ from cryptography.hazmat.backends import default_backend
 import base64
 from PyPDF2 import PdfReader, PdfWriter
 import zipfile
-import pyminizip
-
+import pyzipper
 
 class EncryptionHandler:
     
@@ -131,15 +130,10 @@ class EncryptionHandler:
             temp_output_path = temp_input_path + '.zip'
             
             try:
-                # Create password-protected zip using pyminizip
-                compression_level = 5  # 0-9
-                pyminizip.compress(
-                    temp_input_path,
-                    None,  # path prefix
-                    temp_output_path,
-                    password,
-                    compression_level
-                )
+                # Create password-protected zip using pyzipper
+                with pyzipper.AESZipFile(temp_output_path, 'w', compression=pyzipper.ZIP_DEFLATED, encryption=pyzipper.WZ_AES) as zf:
+                    zf.setpassword(password.encode())
+                    zf.write(temp_input_path, arcname=filename)
                 
                 # Read the encrypted zip
                 with open(temp_output_path, 'rb') as f:

@@ -1,0 +1,6 @@
+piexif
+PyMuPDF
+celery
+redis
+pydantic
+cryptography
