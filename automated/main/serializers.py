@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import FileAnalysis, MetadataEntry, PlatformRule
+from .models import FileAnalysis, MetadataEntry, PlatformRule, SecureShare, SecureShareAccessLog
 import json
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
@@ -225,3 +225,59 @@ class PlatformRuleSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
+
+
+# ============================================================
+# SECURE SHARE SERIALIZERS
+# ============================================================
+
+class SecureShareCreateSerializer(serializers.ModelSerializer):
+    file_analysis_id = serializers.UUIDField(write_only=True)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    class Meta:
+        model = SecureShare
+        fields = ['file_analysis_id', 'password', 'expires_at', 'max_downloads', 'is_one_time']
+
+    def create(self, validated_data):
+        file_analysis_id = validated_data.pop('file_analysis_id')
+        password = validated_data.pop('password', None)
+
+        try:
+            file_analysis = FileAnalysis.objects.get(id=file_analysis_id)
+        except FileAnalysis.DoesNotExist:
+            raise serializers.ValidationError({'file_analysis_id': 'FileAnalysis not found.'})
+
+        share = SecureShare(file_analysis=file_analysis, **validated_data)
+        if password:
+            share.set_password(password)
+        share.save()
+        return share
+
+
+class SecureShareInfoSerializer(serializers.ModelSerializer):
+    filename = serializers.CharField(source='file_analysis.original_filename', read_only=True)
+    file_size = serializers.IntegerField(source='file_analysis.file_size', read_only=True)
+    has_password = serializers.SerializerMethodField()
+    is_valid = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SecureShare
+        fields = [
+            'token', 'filename', 'file_size',
+            'created_at', 'expires_at',
+            'max_downloads', 'current_downloads',
+            'is_one_time', 'has_password', 'is_valid', 'is_active',
+        ]
+
+    def get_has_password(self, obj):
+        return bool(obj.password_hash)
+
+    def get_is_valid(self, obj):
+        return obj.is_valid()
+
+
+class SecureShareAccessLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SecureShareAccessLog
+        fields = ['id', 'accessed_at', 'ip_address', 'user_agent', 'action', 'success', 'error_message']

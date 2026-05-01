@@ -9,7 +9,7 @@ from cryptography.hazmat.backends import default_backend
 import base64
 from PyPDF2 import PdfReader, PdfWriter
 import zipfile
-import pyminizip
+# import pyminizip
 
 
 class EncryptionHandler:
@@ -119,43 +119,7 @@ class EncryptionHandler:
     
     @staticmethod
     def create_password_protected_zip(file_obj, filename: str, password: str):
-        """Create password-protected ZIP file"""
-        try:
-            file_obj.seek(0)
-            
-            # Create temporary files
-            with tempfile.NamedTemporaryFile(delete=False, suffix='_input') as temp_input:
-                temp_input.write(file_obj.read())
-                temp_input_path = temp_input.name
-            
-            temp_output_path = temp_input_path + '.zip'
-            
-            try:
-                # Create password-protected zip using pyminizip
-                compression_level = 5  # 0-9
-                pyminizip.compress(
-                    temp_input_path,
-                    None,  # path prefix
-                    temp_output_path,
-                    password,
-                    compression_level
-                )
-                
-                # Read the encrypted zip
-                with open(temp_output_path, 'rb') as f:
-                    encrypted_zip = f.read()
-                
-                return ContentFile(encrypted_zip)
-            
-            finally:
-                # Clean up temporary files
-                if os.path.exists(temp_input_path):
-                    os.unlink(temp_input_path)
-                if os.path.exists(temp_output_path):
-                    os.unlink(temp_output_path)
-        
-        except Exception as e:
-            raise Exception(f"ZIP encryption failed: {str(e)}")
+        raise Exception("ZIP password protection is disabled on this system. Use normal encryption or PDF password protection.")
     
     @staticmethod
     def protect_file(file_obj, filename: str, password: str, method: str = 'encrypt'):
