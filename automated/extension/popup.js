@@ -16,6 +16,7 @@ const elements = {
     dashboardNavBtn: document.getElementById('dashboardNavBtn'),
     encryptNavBtn: document.getElementById('encryptNavBtn'),
     decryptNavBtn: document.getElementById('decryptNavBtn'),
+    redactNavBtn: document.getElementById('redactNavBtn'),
 
     // Login
     loginSection: document.getElementById('loginSection'),
@@ -84,6 +85,10 @@ function setupEventListeners() {
 
     elements.decryptNavBtn?.addEventListener('click', () => {
         window.location.href = 'encrypt.html?tab=decrypt';
+    });
+
+    elements.redactNavBtn?.addEventListener('click', () => {
+        window.location.href = 'redact.html';
     });
 
     // -- darsh: Login/Signup

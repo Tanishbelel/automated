@@ -44,5 +44,6 @@ urlpatterns = [
     path('encrypt/', EncryptFileView.as_view(), name='encrypt-file'),
     path('decrypt/', DecryptFileView.as_view(), name='decrypt-file'),
     path('validate-password/', ValidatePasswordView.as_view(), name='validate-password'),
+    path('api/redact/', include('redaction.urls'))
     
 ]

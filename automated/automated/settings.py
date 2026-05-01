@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'corsheaders',
     'main',
+    'redaction',
 ]
 
 # FIXED: Remove duplicate CorsMiddleware and fix order
